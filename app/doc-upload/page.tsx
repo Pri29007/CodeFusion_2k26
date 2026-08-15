@@ -34,7 +34,7 @@ const notoSans = Noto_Sans({
  * ---------------------------------------------------------------------- */
 type DocType = "aadhaar" | "income" | "ration" | "kcc";
 
-type DocStatus = "idle" | "uploading" | "scanning" | "done";
+type DocStatus = "idle" | "uploading" | "scanning" | "verifying" | "done";
 
 type DocState = {
   status: DocStatus;
@@ -118,6 +118,14 @@ function StatusBanner({ status }: { status: DocStatus }) {
       </div>
     );
   }
+  if (status === "verifying") {
+  return (
+    <div className="flex items-center gap-2 text-sm text-blue-700 font-medium">
+      <Loader2 className="w-4 h-4 animate-spin" />
+      Verifying...
+    </div>
+  );
+}
   if (status === "done") {
     return (
       <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
@@ -157,7 +165,7 @@ function DocumentUploadCard({
     e.target.value = "";
   }
 
-  const isProcessing = state.status === "uploading" || state.status === "scanning";
+  const isProcessing = state.status === "uploading" || state.status === "scanning" || state.status === "verifying";
   const isIdle = state.status === "idle";
 
   return (
@@ -283,12 +291,41 @@ export default function DocumentUploadPage() {
   }
 
   function handleFileSelected(docType: DocType, file: File) {
-    const previewUrl = URL.createObjectURL(file);
+  const previewUrl = URL.createObjectURL(file);
 
+  setDocStates((prev) => ({
+    ...prev,
+    [docType]: { status: "uploading", fileName: file.name, previewUrl },
+  }));
+
+  setTimeout(() => {
     setDocStates((prev) => ({
       ...prev,
-      [docType]: { status: "uploading", fileName: file.name, previewUrl },
+      [docType]: { ...prev[docType], status: "scanning" },
     }));
+
+    setTimeout(() => {
+      setDocStates((prev) => ({
+        ...prev,
+        [docType]: { ...prev[docType], status: "verifying" },
+      }));
+
+      setTimeout(() => {
+        setDocStates((prev) => ({
+          ...prev,
+          [docType]: { ...prev[docType], status: "done" },
+        }));
+
+        // auto-redirect once required doc verified — no real auth yet
+        if (REQUIRED_DOCS.includes(docType)) {
+          setTimeout(() => {
+            router.push("/dashboard");
+          }, 600); // small pause so user sees "done" tick before nav
+        }
+      }, 1500); // verify animation duration, 1-2s
+    }, 1400);
+  }, 1000);
+}
 
     // -----------------------------------------------------------------
     // TODO (backend): replace this mocked sequence with a real upload.
@@ -301,21 +338,6 @@ export default function DocumentUploadPage() {
     // -> then set status "done" only once the real response comes back,
     //    and surface extractedFields for the user to confirm/correct.
     // -----------------------------------------------------------------
-    setTimeout(() => {
-      setDocStates((prev) => ({
-        ...prev,
-        [docType]: { ...prev[docType], status: "scanning" },
-      }));
-
-      setTimeout(() => {
-        setDocStates((prev) => ({
-          ...prev,
-          [docType]: { ...prev[docType], status: "done" },
-        }));
-      }, 1400);
-    }, 1000);
-  }
-
   function handleRetake(docType: DocType) {
     // Clear current file/preview and drop back to the idle upload buttons.
     setDocStates((prev) => ({
