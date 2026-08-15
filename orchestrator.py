@@ -1,21 +1,20 @@
 """
 LangGraph orchestration: the state machine that sequences the whole citizen journey.
-
-Nodes owned by Person C: extract_document, match_eligibility, voice_readback.
-Nodes owned by Person D (stubbed here as callbacks so C can build/test independently):
-  auto_fill_form, human_in_loop_pause, track_status.
-
-The graph is built so Person D's functions can be dropped in later via the
-`agent_callbacks` dict without Person C's code changing.
+...
 """
+from dotenv import load_dotenv
+load_dotenv()  # MUST run before importing modules that read env vars at import time
+
+import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 from typing import TypedDict, Optional, Callable
 from langgraph.graph import StateGraph, END
 
 from document_extraction import ExtractedProfile, extract_from_image, merge_profiles
 from eligibility_matching import match_eligibility, EligibilityResult
 from voice_pipeline import english_to_voice_output
-
-
 class CitizenState(TypedDict, total=False):
     lang_code: str
     document_paths: list[str]
@@ -51,7 +50,9 @@ def node_voice_readback(state: CitizenState) -> CitizenState:
     else:
         names = ", ".join(v["scheme_name"] for v in eligible)
         summary = f"You are eligible for the following schemes: {names}."
+    print(f"DEBUG: generating voice reply in '{state['lang_code']}'...")
     path = english_to_voice_output(summary, state["lang_code"])
+    print(f"DEBUG: voice reply saved to {path}")
     state["voice_reply_path"] = path
     return state
 

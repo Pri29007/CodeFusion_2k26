@@ -1,27 +1,27 @@
 """
-Eligibility matching: takes the extracted citizen profile, retrieves relevant scheme
-context via RAG, and asks the LLM to decide match/no-match for EACH of the 3 schemes
-with a plain-language explanation.
+Open-ended eligibility matching: the LLM identifies ALL central and state
+government welfare schemes a citizen may be eligible for, using its own
+knowledge — no hardcoded scheme catalog to maintain.
 
-Two layers of constraint keep this from hallucinating schemes that don't exist in
-our mocked system:
-  1. STRUCTURAL: the Pydantic output schema has a fixed field per scheme_id — the
-     LLM literally cannot invent a 4th field.
-  2. PROMPT: explicit instruction to reason ONLY from the provided context.
+A separate keyword-matching pass flags which of those results correspond to
+our 3 automatable schemes (the only ones with working mock portals). This
+keeps "which schemes exist" and "which schemes we can automate" as two
+independent concerns — expanding automation later means adding a keyword
+entry in config.py, not touching this matching logic.
 """
 import json
 from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_groq import ChatGroq
 
-from config import GROQ_API_KEY, GROQ_MODEL, SCHEME_IDS
+from config import GROQ_API_KEY, GROQ_MODEL, AUTOMATABLE_SCHEMES
 from document_extraction import ExtractedProfile
-from rag_pipeline import get_retriever
 
 
 class SchemeVerdict(BaseModel):
-    scheme_id: Literal["pm_kisan", "pmay", "ayushman_bharat"]
-    scheme_name: str
+    scheme_name: str = Field(description="Official name of the government scheme")
+    category: str = Field(description="e.g. Agriculture, Housing, Healthcare, Education, Disability")
+    level: Literal["central", "state"] = Field(description="Central govt scheme or state-specific")
     eligible: bool
     confidence: Literal["high", "medium", "low"]
     reason: str = Field(description="Plain-language explanation, max 2 sentences, no jargon")
@@ -29,6 +29,7 @@ class SchemeVerdict(BaseModel):
         default_factory=list,
         description="Fields we still need from the citizen to confirm eligibility, if any",
     )
+    is_automatable: bool = False  # filled in after LLM call, not by the LLM itself
 
 
 class EligibilityResult(BaseModel):
@@ -38,56 +39,64 @@ class EligibilityResult(BaseModel):
     def eligible_schemes(self) -> list[SchemeVerdict]:
         return [v for v in self.verdicts if v.eligible]
 
+    @property
+    def automatable_eligible_schemes(self) -> list[SchemeVerdict]:
+        return [v for v in self.verdicts if v.eligible and v.is_automatable]
+
 
 MATCHING_PROMPT = """
-You are an eligibility-matching assistant for an Indian government welfare scheme
-program. You will be given a citizen's profile and official scheme criteria retrieved
-from our database.
+You are an expert on Indian government welfare schemes — central and state level —
+covering housing, healthcare, agriculture, education, disability, and income support.
 
-STRICT RULES:
-- Only evaluate the schemes present in the CONTEXT below. Do not mention, reference,
-  or invent any scheme not in the context.
-- Base every verdict strictly on the criteria text provided — do not use outside
-  knowledge about these schemes even if you know more about them.
-- If the profile is missing information needed to confirm eligibility for a scheme,
-  set eligible based on your best reading of available data, but list what's missing
-  in missing_info.
-- Explanations must be simple, plain language a non-technical citizen can understand.
-  No legal or bureaucratic jargon.
+Given the citizen profile below, identify EVERY scheme they are likely eligible for,
+based on standard, well-documented eligibility criteria for schemes like (but not
+limited to) PM-KISAN, PMAY, Ayushman Bharat/PM-JAY, National Scholarship schemes,
+disability pension schemes, and relevant state-level schemes for their state if known.
+
+Rules:
+- Only include schemes you have reasonable confidence actually exist with real criteria.
+  Do not invent scheme names.
+- If the citizen's state is known, prioritize including relevant state schemes, marked
+  with level="state".
+- For each scheme, give a plain-language reason a non-technical citizen can understand.
+- If information is missing that would change the verdict, note it in missing_info
+  rather than guessing.
+- Aim for thoroughness — a citizen should see every scheme they may qualify for, not
+  just the most famous ones.
 
 CITIZEN PROFILE:
 {profile}
-
-SCHEME CONTEXT (retrieved):
-{context}
 
 Return ONLY valid JSON matching this schema, no prose outside the JSON:
 {schema}
 """
 
 
+def _flag_automatable(verdict: SchemeVerdict) -> bool:
+    """Keyword match against our 3 mock-portal schemes — case-insensitive, no exact-name dependency."""
+    name_lower = verdict.scheme_name.lower()
+    for scheme_info in AUTOMATABLE_SCHEMES.values():
+        if any(keyword in name_lower for keyword in scheme_info["keywords"]):
+            return True
+    return False
+
+
 def match_eligibility(profile: ExtractedProfile) -> EligibilityResult:
-    retriever = get_retriever(k=len(SCHEME_IDS))  # always pull all 3 — small, fixed universe
     profile_text = profile.model_dump_json(indent=2)
 
-    retrieved_docs = retriever.invoke(profile_text)
-    context = "\n\n---\n\n".join(d.page_content for d in retrieved_docs)
-
     llm = ChatGroq(api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0)
+    structured_llm = llm.with_structured_output(EligibilityResult)
 
     prompt = MATCHING_PROMPT.format(
         profile=profile_text,
-        context=context,
         schema=EligibilityResult.model_json_schema(),
     )
 
-    response = llm.invoke(prompt)
-    raw = response.content.strip().removeprefix("```json").removesuffix("```").strip()
-    data = json.loads(raw)
-    result = EligibilityResult(**data)
+    result = structured_llm.invoke(prompt)
 
-    # Hard guardrail: drop anything that somehow isn't one of our 3 scheme_ids
-    result.verdicts = [v for v in result.verdicts if v.scheme_id in SCHEME_IDS]
+    for v in result.verdicts:
+        v.is_automatable = _flag_automatable(v)
+
     return result
 
 
@@ -102,10 +111,13 @@ if __name__ == "__main__":
         is_government_employee=False,
         pays_income_tax=False,
         caste_category="OBC",
+        state="Maharashtra",
     )
     result = match_eligibility(sample)
     for v in result.verdicts:
-        print(f"{v.scheme_name}: {'ELIGIBLE' if v.eligible else 'NOT ELIGIBLE'} ({v.confidence})")
+        status = "ELIGIBLE" if v.eligible else "NOT ELIGIBLE"
+        auto = " 🤖 AUTOMATABLE" if v.is_automatable else ""
+        print(f"\n{v.scheme_name} [{v.level}]{auto}: {status} ({v.confidence})")
         print(f"  Reason: {v.reason}")
         if v.missing_info:
             print(f"  Missing: {v.missing_info}")

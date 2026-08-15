@@ -1,1 +1,6 @@
+sample_audio/
+sample_docs/
+*.wav
+__pycache__/
+venv/
 .env

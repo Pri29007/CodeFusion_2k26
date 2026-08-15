@@ -1,24 +1,34 @@
 """
-Document extraction: takes a photo of an Aadhaar / income certificate / land record
-and returns structured, typed data using Gemini's multimodal vision model.
+Document extraction using Gemini's Interactions API.
 
-Why Gemini Vision instead of a separate OCR tool: it reads AND understands layout/
-context in one call, so "Date of Birth" printed in Devanagari next to a logo still
-gets mapped to the correct field, instead of returning raw unstructured text.
+Takes a photo of an Aadhaar / income certificate / land record
+and returns structured, typed data.
 """
+
 import base64
-import json
+import mimetypes
 from typing import Optional
-from pydantic import BaseModel, Field
-import google.generativeai as genai
+
+from google import genai
+from pydantic import BaseModel
 
 from config import GEMINI_API_KEY, GEMINI_VISION_MODEL
 
-genai.configure(api_key=GEMINI_API_KEY)
 
+# ---------------------------------------------------------------------------
+# Gemini client
+# ---------------------------------------------------------------------------
+
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+# ---------------------------------------------------------------------------
+# Structured output model
+# ---------------------------------------------------------------------------
 
 class ExtractedProfile(BaseModel):
     """Structured citizen profile built up from one or more uploaded documents."""
+
     full_name: Optional[str] = None
     date_of_birth: Optional[str] = None
     age: Optional[int] = None
@@ -30,64 +40,145 @@ class ExtractedProfile(BaseModel):
     owns_land: Optional[bool] = None
     land_area_acres: Optional[float] = None
     owns_pucca_house: Optional[bool] = None
-    caste_category: Optional[str] = None  # SC/ST/OBC/General
+    caste_category: Optional[str] = None
     is_government_employee: Optional[bool] = None
     pays_income_tax: Optional[bool] = None
     disability_status: Optional[bool] = None
-    document_type_seen: Optional[str] = None  # aadhaar / income_certificate / land_record
+    document_type_seen: Optional[str] = None
 
+
+# ---------------------------------------------------------------------------
+# Prompt
+# ---------------------------------------------------------------------------
 
 EXTRACTION_PROMPT = """
-You are a document extraction engine for an Indian government welfare-scheme assistant.
-You will be shown a photo of an official document (Aadhaar card, income certificate,
-or land record). Extract every field you can confidently read into the JSON schema below.
+You are a document extraction engine for an Indian government
+welfare-scheme assistant.
+
+You will be shown a photo of an official document such as:
+- Aadhaar card
+- income certificate
+- land record
+
+Extract every field that you can confidently read.
 
 Rules:
-- If a field is not visible or not present on this document, leave it as null. Do NOT guess.
-- Normalize income to an annual number in INR if the document states monthly income.
-- owns_land / owns_pucca_house / is_government_employee / pays_income_tax should only be
-  set to true/false if the document explicitly states it — otherwise null.
-- Return ONLY valid JSON matching this schema, no prose, no markdown fences.
 
-Schema:
-{schema}
+1. If a field is not visible or not present on this document,
+   return null. NEVER guess.
+
+2. Normalize income to an annual number in INR if the document
+   states monthly income.
+
+3. owns_land, owns_pucca_house, is_government_employee,
+   pays_income_tax, and disability_status should only be set to
+   true or false if the document explicitly provides enough
+   evidence. Otherwise return null.
+
+4. Preserve names, addresses, and document values accurately.
+
+5. Do not infer information from context.
+
+6. Return only data matching the provided schema.
 """
 
 
+# ---------------------------------------------------------------------------
+# Image extraction
+# ---------------------------------------------------------------------------
+
 def extract_from_image(image_path: str) -> ExtractedProfile:
-    """Send one document image to Gemini Vision and parse the structured response."""
+    """
+    Send one document image to Gemini and return structured data.
+    """
+
+    # Read image
     with open(image_path, "rb") as f:
         image_bytes = f.read()
 
-    model = genai.GenerativeModel(GEMINI_VISION_MODEL)
-    prompt = EXTRACTION_PROMPT.format(schema=ExtractedProfile.model_json_schema())
+    # Determine MIME type
+    mime_type, _ = mimetypes.guess_type(image_path)
 
-    response = model.generate_content(
-        [
-            prompt,
-            {"mime_type": "image/jpeg", "data": image_bytes},
+    if mime_type is None:
+        raise ValueError(
+            f"Could not determine image MIME type for: {image_path}"
+        )
+
+    if not mime_type.startswith("image/"):
+        raise ValueError(
+            f"Expected an image file, got MIME type: {mime_type}"
+        )
+
+    # Gemini Interactions API expects base64 image data
+    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    # Structured output schema generated from Pydantic
+    schema = ExtractedProfile.model_json_schema()
+
+    # Create interaction
+    interaction = client.interactions.create(
+        model=GEMINI_VISION_MODEL,
+        input=[
+            {
+                "type": "image",
+                "mime_type": mime_type,
+                "data": image_b64,
+            },
+            {
+                "type": "text",
+                "text": EXTRACTION_PROMPT,
+            },
         ],
-        generation_config={"response_mime_type": "application/json"},
+        response_format={
+            "type": "text",
+            "mime_type": "application/json",
+            "schema": schema,
+        },
     )
 
-    data = json.loads(response.text)
-    return ExtractedProfile(**data)
+    # Parse Gemini's structured JSON directly into Pydantic
+    return ExtractedProfile.model_validate_json(
+        interaction.output_text
+    )
 
 
-def merge_profiles(profiles: list[ExtractedProfile]) -> ExtractedProfile:
+# ---------------------------------------------------------------------------
+# Merge multiple documents
+# ---------------------------------------------------------------------------
+
+def merge_profiles(
+    profiles: list[ExtractedProfile],
+) -> ExtractedProfile:
     """
-    Citizens upload multiple documents (Aadhaar + income cert + land record).
-    Merge them into one profile, later documents filling gaps left by earlier ones.
+    Citizens can upload multiple documents.
+
+    Example:
+        Aadhaar -> name, DOB, address
+        Income certificate -> annual income
+        Land record -> land ownership
+
+    Later documents fill fields that are missing from earlier documents.
     """
+
     merged: dict = {}
-    for p in profiles:
-        for field, value in p.model_dump().items():
+
+    for profile in profiles:
+        for field, value in profile.model_dump().items():
+
             if value is not None and merged.get(field) is None:
                 merged[field] = value
+
     return ExtractedProfile(**merged)
 
 
+# ---------------------------------------------------------------------------
+# Manual test
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    # quick manual test
-    profile = extract_from_image("sample_docs/aadhaar_sample.jpg")
+
+    profile = extract_from_image(
+        "sample_docs/aadhaar_sample.jpg"
+    )
+
     print(profile.model_dump_json(indent=2))
