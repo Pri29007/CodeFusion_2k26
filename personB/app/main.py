@@ -14,7 +14,7 @@ first, then gets routed to the right place based on the URL.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import health, applications
+from app.routes import health, applications, documents, notifications, users, voice, audit_log
 
 app = FastAPI(title="Scheme Agent Backend")
 
@@ -36,6 +36,11 @@ app.add_middleware(
 # your database has separate tables for separate concerns.
 app.include_router(health.router)
 app.include_router(applications.router)
+app.include_router(documents.router)
+app.include_router(notifications.router)
+app.include_router(users.router)
+app.include_router(voice.router)
+app.include_router(audit_log.router)
 
 
 @app.get("/")

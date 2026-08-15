@@ -27,4 +27,6 @@ class User(Base):
     phone_number = Column(String, unique=True)
     full_name = Column(String)
     preferred_language = Column(String, default="hi")
+    aadhaar_doc_url = Column(String)
+    aadhaar_doc_type = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
