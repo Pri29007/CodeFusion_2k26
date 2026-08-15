@@ -455,16 +455,8 @@ export default function DemographicDetailsPage() {
       <option value="">Select language</option>
       <option value="hi">हिंदी (Hindi)</option>
       <option value="en">English</option>
-      <option value="bn">বাংলা (Bengali)</option>
-      <option value="ta">தமிழ் (Tamil)</option>
-      <option value="te">తెలుగు (Telugu)</option>
       <option value="mr">मराठी (Marathi)</option>
-      <option value="gu">ગુજરાતી (Gujarati)</option>
-      <option value="kn">ಕನ್ನಡ (Kannada)</option>
-      <option value="ml">മലയാളം (Malayalam)</option>
       <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-      <option value="or">ଓଡ଼ିଆ (Odia)</option>
-      <option value="as">অসমীয়া (Assamese)</option>
     </select>
   </Field>
 </Section>
@@ -544,6 +536,7 @@ export default function DemographicDetailsPage() {
     <option value="">Select state</option>
     <option value="up">Uttar Pradesh</option>
     <option value="bihar">Bihar</option>
+    <option value="bihar">Punjab</option>
     <option value="mp">Madhya Pradesh</option>
     <option value="rajasthan">Rajasthan</option>
     <option value="maharashtra">Maharashtra</option>
