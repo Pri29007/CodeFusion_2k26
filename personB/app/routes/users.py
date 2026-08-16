@@ -12,13 +12,15 @@ rather than re-uploaded each time.
 """
 
 import os
-import uuid
+from datetime import date
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from supabase import create_client
 
 from app.database import get_db
 from app.models.user import User
+from app.models.document import Document
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -35,9 +37,21 @@ supabase = create_client(
 async def create_user(
     aadhaar_number: str = Form(...),
     auth_id: str = Form(...),
-    full_name: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
     phone_number: str = Form(...),
+    date_of_birth: date = Form(...),
+    gender: str = Form(...),
     preferred_language: str = Form("hi"),
+    address: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    state: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
+    occupation: Optional[str] = Form(None),
+    family_members_under_18: Optional[int] = Form(None),
+    annual_income: Optional[float] = Form(None),
+    bank_account_number: Optional[str] = Form(None),
+    bank_ifsc: Optional[str] = Form(None),
     aadhaar_doc: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -64,9 +78,21 @@ async def create_user(
     new_user = User(
         aadhaar_number=aadhaar_number,
         auth_id=auth_id,
-        full_name=full_name,
+        first_name=first_name,
+        last_name=last_name,
         phone_number=phone_number,
+        date_of_birth=date_of_birth,
+        gender=gender,
         preferred_language=preferred_language,
+        address=address,
+        city=city,
+        state=state,
+        category=category,
+        occupation=occupation,
+        family_members_under_18=family_members_under_18,
+        annual_income=annual_income,
+        bank_account_number=bank_account_number,
+        bank_ifsc=bank_ifsc,
         aadhaar_doc_url=aadhaar_doc_url,
         aadhaar_doc_type=file_extension,
     )
@@ -82,3 +108,21 @@ def get_user(aadhaar_number: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@router.get("/{aadhaar_number}/documents")
+def get_all_documents_for_user(aadhaar_number: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.aadhaar_number == aadhaar_number).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    other_documents = db.query(Document).filter(Document.user_id == aadhaar_number).all()
+
+    return {
+        "aadhaar": {
+            "doc_type": "aadhaar",
+            "file_url": user.aadhaar_doc_url,
+            "file_type": user.aadhaar_doc_type,
+        },
+        "documents": other_documents,
+    }
