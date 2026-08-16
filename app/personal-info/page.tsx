@@ -44,6 +44,7 @@ type FormData = {
   phoneNumber: string;
   dob: string;
   language: string;
+  aadhaarNumber: string;
   age: string;
   gender: string;
   category: string;
@@ -71,6 +72,7 @@ const initialFormData: FormData = {
   phoneNumber: "",
   dob: "",
   language: "",
+  aadhaarNumber: "",
   age: "",
   gender: "",
   category: "",
@@ -459,6 +461,18 @@ export default function DemographicDetailsPage() {
       <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
     </select>
   </Field>
+
+  <Field label="Aadhaar Number">
+  <input
+    type="text"
+    inputMode="numeric"
+    maxLength={12}
+    value={formData.aadhaarNumber}
+    onChange={(e) => update("aadhaarNumber", e.target.value.replace(/\D/g, "").slice(0, 12))}
+    placeholder="XXXX XXXX XXXX"
+    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 tracking-widest"
+  />
+</Field>
 </Section>
           {/* SECTION 1: Demographic */}
           <Section
@@ -505,6 +519,7 @@ export default function DemographicDetailsPage() {
                   { label: "OBC", value: "obc" },
                   { label: "SC", value: "sc" },
                   { label: "ST", value: "st" },
+                  { label: "EWS", value: "ews" },
                 ]}
               />
             </Field>
