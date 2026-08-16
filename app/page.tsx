@@ -47,7 +47,7 @@ const COPY: Record<Lang, {
   helpline: string;
 }> = {
   en: {
-    title: "Setu",
+    title: "Yojana Mitra",
     tagline: "Government schemes, made simple",
     phoneLabel: "Mobile number",
     phonePlaceholder: "98765 43210",
@@ -62,7 +62,7 @@ const COPY: Record<Lang, {
     helpline: "Need help? Call 1800-11-0000 (toll-free)",
   },
   hi: {
-    title: "सेतु",
+    title: "योजना मित्र",
     tagline: "सरकारी योजनाएं, अब आसान भाषा में",
     phoneLabel: "मोबाइल नंबर",
     phonePlaceholder: "98765 43210",
