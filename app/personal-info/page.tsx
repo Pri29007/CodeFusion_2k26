@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Poppins, Noto_Sans } from "next/font/google";
 import {
@@ -14,8 +14,16 @@ import {
   Briefcase,
   HeartPulse,
   Loader2,
-  MapPin,
   Globe,
+  Camera,
+  ImageIcon,
+  FileCheck2,
+  ScanLine,
+  RotateCcw,
+  Trash2,
+  Lock,
+  FileText,
+  Volume2,
 } from "lucide-react";
 
 const poppins = Poppins({
@@ -33,17 +41,14 @@ const notoSans = Noto_Sans({
 });
 
 /* -------------------------------------------------------------------------
- * TYPES
- * When wiring to a real backend, this shape is what you'll POST to
- * something like `/api/profile`. Keep it as the single source of truth
- * for the form's state.
+ * TYPES — profile form
  * ---------------------------------------------------------------------- */
 type FormData = {
   firstName: string;
   lastName: string;
   phoneNumber: string;
   dob: string;
-  language: string;
+
   aadhaarNumber: string;
   age: string;
   gender: string;
@@ -71,7 +76,7 @@ const initialFormData: FormData = {
   lastName: "",
   phoneNumber: "",
   dob: "",
-  language: "",
+
   aadhaarNumber: "",
   age: "",
   gender: "",
@@ -92,18 +97,49 @@ const initialFormData: FormData = {
   landAcres: "",
   disability: null,
   chronicIllness: null,
-
 };
 
-type SectionId = "basic" | "demographic" | "financial" | "occupation" | "health";
+type SectionId =
+  | "basic"
+  | "demographic"
+  | "financial"
+  | "occupation"
+  | "health"
+  | "documents";
 
 /* -------------------------------------------------------------------------
- * REUSABLE UI PIECES
- * These are intentionally dumb/presentational — swap className tokens in
- * one place if the design system changes later.
+ * TYPES — document upload
  * ---------------------------------------------------------------------- */
+type DocType = "aadhaar" | "income" | "ration" | "kcc";
+type DocStatus = "idle" | "uploading" | "scanning" | "verifying" | "done";
 
-/** A row of large, tappable "chip" buttons used instead of <select> dropdowns. */
+type DocState = {
+  status: DocStatus;
+  fileName: string | null;
+  previewUrl: string | null;
+};
+
+const DOC_LABELS: Record<DocType, string> = {
+  aadhaar: "Aadhaar Card",
+  income: "Income Certificate",
+  ration: "Ration Card",
+  kcc: "Kisan Credit Card",
+};
+
+// Aadhaar is the only mandatory / always-unlocked doc.
+// Everything else stays locked until Aadhaar is verified ("done").
+const REQUIRED_DOCS: DocType[] = ["aadhaar"];
+const GATED_DOCS: DocType[] = ["income", "ration", "kcc"];
+
+const initialDocState: DocState = {
+  status: "idle",
+  fileName: null,
+  previewUrl: null,
+};
+
+/* -------------------------------------------------------------------------
+ * REUSABLE UI PIECES — form controls
+ * ---------------------------------------------------------------------- */
 function ChipGroup({
   options,
   value,
@@ -146,7 +182,6 @@ function ChipGroup({
   );
 }
 
-/** Simple Yes / No toggle, styled as two big chips rather than a switch. */
 function YesNoToggle({
   value,
   onChange,
@@ -184,8 +219,6 @@ function YesNoToggle({
   );
 }
 
-/** Number stepper with - / + buttons — avoids users having to type on a
- * cramped numeric keyboard for small counts like rooms/family members. */
 function Stepper({
   value,
   onChange,
@@ -224,7 +257,6 @@ function Stepper({
   );
 }
 
-/** Field wrapper: label + helper text (which scheme this maps to) + control. */
 function Field({
   label,
   helper,
@@ -245,8 +277,6 @@ function Field({
   );
 }
 
-/** Collapsible section card (accordion). Shows a check badge once every
- * required field inside has a value, so users get a sense of progress. */
 function Section({
   id,
   title,
@@ -310,20 +340,234 @@ function Section({
 }
 
 /* -------------------------------------------------------------------------
+ * REUSABLE UI PIECES — document upload
+ * ---------------------------------------------------------------------- */
+function DocChip({
+  label,
+  active,
+  done,
+  locked,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  done: boolean;
+  locked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={locked}
+      aria-pressed={active}
+      className={`min-h-[48px] px-4 rounded-full text-sm font-medium border flex items-center gap-1.5 transition-colors ${
+        locked
+          ? "bg-gray-50 border-gray-200 text-gray-350 cursor-not-allowed"
+          : active
+          ? "bg-blue-700 border-blue-700 text-white"
+          : "bg-white border-gray-300 text-gray-700 active:bg-gray-50"
+      }`}
+    >
+      {locked && <Lock className="w-3.5 h-3.5 text-gray-350" />}
+      {done && (
+        <Check
+          className={`w-4 h-4 ${active ? "text-white" : "text-blue-700"}`}
+          strokeWidth={2.5}
+        />
+      )}
+      {label}
+    </button>
+  );
+}
+
+function StatusBanner({ status }: { status: DocStatus }) {
+  if (status === "uploading") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-blue-700 font-medium">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Uploading...
+      </div>
+    );
+  }
+  if (status === "scanning") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-blue-700 font-medium">
+        <ScanLine className="w-4 h-4 animate-pulse" />
+        Scanning Document (Vision AI)...
+      </div>
+    );
+  }
+  if (status === "verifying") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-blue-700 font-medium">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Verifying...
+      </div>
+    );
+  }
+  if (status === "done") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+        <FileCheck2 className="w-4 h-4" />
+        Done
+      </div>
+    );
+  }
+  return null;
+}
+
+function DocumentUploadCard({
+  docType,
+  state,
+  onFileSelected,
+  onRetake,
+  onRemove,
+}: {
+  docType: DocType;
+  state: DocState;
+  onFileSelected: (docType: DocType, file: File) => void;
+  onRetake: (docType: DocType) => void;
+  onRemove: (docType: DocType) => void;
+}) {
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onFileSelected(docType, file);
+    e.target.value = "";
+  }
+
+  const isProcessing =
+    state.status === "uploading" ||
+    state.status === "scanning" ||
+    state.status === "verifying";
+  const isIdle = state.status === "idle";
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+      <p className="text-sm font-semibold text-gray-900 mb-3">
+        {DOC_LABELS[docType]}
+        {REQUIRED_DOCS.includes(docType) && (
+          <span className="ml-1.5 text-xs font-normal text-red-500">Required</span>
+        )}
+      </p>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleInputChange}
+        className="hidden"
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleInputChange}
+        className="hidden"
+      />
+
+      {isIdle && (
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="min-h-[52px] rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 font-medium text-sm flex flex-col items-center justify-center gap-1 active:bg-blue-100"
+          >
+            <Camera className="w-5 h-5" />
+            Take Photo
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            className="min-h-[52px] rounded-xl border-2 border-dashed border-gray-300 text-gray-600 font-medium text-sm flex flex-col items-center justify-center gap-1 active:bg-gray-50"
+          >
+            <ImageIcon className="w-5 h-5" />
+            Upload from Gallery
+          </button>
+        </div>
+      )}
+
+      {!isIdle && (
+        <div className="flex gap-3">
+          <div className="w-20 h-20 rounded-xl overflow-hidden border border-gray-200 shrink-0 bg-gray-50">
+            {state.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={state.previewUrl}
+                alt={`${DOC_LABELS[docType]} preview`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-300">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div>
+              <p className="text-sm text-gray-800 truncate">{state.fileName}</p>
+              <div className="mt-1">
+                <StatusBanner status={state.status} />
+              </div>
+            </div>
+
+            {!isProcessing && (
+              <div className="flex items-center gap-4 mt-2">
+                <button
+                  type="button"
+                  onClick={() => onRetake(docType)}
+                  className="flex items-center gap-1 text-xs font-medium text-blue-700 min-h-[32px]"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Retake
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(docType)}
+                  className="flex items-center gap-1 text-xs font-medium text-red-500 min-h-[32px]"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
  * PAGE
  * ---------------------------------------------------------------------- */
 export default function DemographicDetailsPage() {
   const router = useRouter();
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
- const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
-  basic: true,
-  demographic: false,
-  financial: false,
-  occupation: false,
-  health: false,
-});
+  const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
+    basic: true,
+    demographic: false,
+    financial: false,
+    occupation: false,
+    health: false,
+    documents: false,
+  });
   const [isSaving, setIsSaving] = useState(false);
+
+  // ---- document upload state ----
+  const [selectedDocs, setSelectedDocs] = useState<DocType[]>(["aadhaar"]);
+  const [docStates, setDocStates] = useState<Record<DocType, DocState>>({
+    aadhaar: { ...initialDocState },
+    income: { ...initialDocState },
+    ration: { ...initialDocState },
+    kcc: { ...initialDocState },
+  });
 
   function update<K extends keyof FormData>(key: K, value: FormData[K]) {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -335,7 +579,7 @@ export default function DemographicDetailsPage() {
 
   // Section completion checks — used only to show the check-mark badge.
   const basicComplete =
-  !!formData.firstName && !!formData.lastName && !!formData.phoneNumber && !!formData.dob && !!formData.language;
+    !!formData.firstName && !!formData.lastName && !!formData.phoneNumber && !!formData.dob ;
   const demographicComplete =
     !!formData.age && !!formData.gender && !!formData.category && !!formData.maritalStatus;
   const financialComplete =
@@ -346,14 +590,92 @@ export default function DemographicDetailsPage() {
   // Health section is optional, so it's never "required" to be complete.
   const healthComplete = formData.disability !== null && formData.chronicIllness !== null;
 
-  const canSubmit = basicComplete && demographicComplete && financialComplete && occupationComplete;
+  const aadhaarDone = docStates.aadhaar.status === "done";
+  // Documents section badge only cares about the mandatory doc (Aadhaar).
+  const documentsComplete = aadhaarDone;
 
-  function handleSaveAndNext() {
+  // Final gate: profile sections + Aadhaar verified. Other docs are optional.
+  const canSubmit =
+    basicComplete && demographicComplete && financialComplete && occupationComplete && aadhaarDone;
+
+  // ---- document handlers ----
+  function toggleDocSelection(docType: DocType) {
+    // Gated docs can't even be selected until Aadhaar is verified.
+    if (GATED_DOCS.includes(docType) && !aadhaarDone) return;
+    setSelectedDocs((prev) =>
+      prev.includes(docType) ? prev.filter((d) => d !== docType) : [...prev, docType]
+    );
+  }
+
+  function handleFileSelected(docType: DocType, file: File) {
+    const previewUrl = URL.createObjectURL(file);
+
+    setDocStates((prev) => ({
+      ...prev,
+      [docType]: { status: "uploading", fileName: file.name, previewUrl },
+    }));
+
+    setTimeout(() => {
+      setDocStates((prev) => ({
+        ...prev,
+        [docType]: { ...prev[docType], status: "scanning" },
+      }));
+
+      setTimeout(() => {
+        setDocStates((prev) => ({
+          ...prev,
+          [docType]: { ...prev[docType], status: "verifying" },
+        }));
+
+        setTimeout(() => {
+          setDocStates((prev) => ({
+            ...prev,
+            [docType]: { ...prev[docType], status: "done" },
+          }));
+          // No auto-redirect here anymore — user decides when to continue
+          // via the "Continue to Dashboard" button below, since more
+          // (optional) docs may now be uploaded once Aadhaar is done.
+        }, 1500); // verify animation duration, 1-2s
+      }, 1400);
+    }, 1000);
+
+    // -----------------------------------------------------------------
+    // TODO (backend): replace this mocked sequence with a real upload.
+    //
+    // const form = new FormData();
+    // form.append("file", file);
+    // form.append("docType", docType);
+    // const res = await fetch("/api/documents", { method: "POST", body: form });
+    // const { extractedFields } = await res.json();
+    // -> then set status "done" only once the real response comes back,
+    //    and surface extractedFields for the user to confirm/correct.
+    // -----------------------------------------------------------------
+  }
+
+  function handleRetake(docType: DocType) {
+    setDocStates((prev) => ({
+      ...prev,
+      [docType]: { ...initialDocState },
+    }));
+  }
+
+  function handleRemove(docType: DocType) {
+    setDocStates((prev) => ({
+      ...prev,
+      [docType]: { ...initialDocState },
+    }));
+    // Never fully deselect Aadhaar — keep its card visible since it's required.
+    if (docType !== "aadhaar") {
+      setSelectedDocs((prev) => prev.filter((d) => d !== docType));
+    }
+  }
+
+  function handleContinue() {
     if (!canSubmit) return;
     setIsSaving(true);
 
     // ---------------------------------------------------------------
-    // TODO (backend): replace this mock delay with a real API call, e.g.
+    // TODO (backend): replace this mock delay with real API calls, e.g.
     //
     // const res = await fetch("/api/profile", {
     //   method: "POST",
@@ -362,12 +684,23 @@ export default function DemographicDetailsPage() {
     // });
     // if (!res.ok) { setIsSaving(false); /* show error toast */ return; }
     //
-    // Only navigate forward once the save actually succeeds.
+    // Then, if applicable, a final "onboarding complete" call, e.g.
+    // POST /api/applications/submit, before navigating.
     // ---------------------------------------------------------------
     setTimeout(() => {
       setIsSaving(false);
-      router.push("/doc-upload");
+      router.push("/dashboard");
     }, 1200);
+  }
+
+  function handleListen() {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // stop any previous playback
+    const utterance = new SpeechSynthesisUtterance(
+      "Tell us about yourself. This helps us match you to the right schemes. Fill in your basic info, demographic details, financial and household details, occupation, and upload your Aadhaar card."
+    );
+    utterance.lang = "hi-IN"; // swap based on formData language pick if kept elsewhere
+    window.speechSynthesis.speak(utterance);
   }
 
   return (
@@ -377,10 +710,22 @@ export default function DemographicDetailsPage() {
       {/* Header with step indicator */}
       <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
         <div className="max-w-sm mx-auto">
-          <p className="text-xs font-medium text-blue-700 mb-1">Step 2 of 3</p>
-          <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-gray-900">
-            Tell us about yourself
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-blue-700 mb-1">Step 2 of 2</p>
+              <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-gray-900">
+                Tell us about yourself
+              </h1>
+            </div>
+            <button
+              type="button"
+              onClick={handleListen}
+              className="shrink-0 min-h-[40px] px-4 rounded-full bg-blue-900 text-white text-sm font-semibold flex items-center gap-2 active:bg-blue-800"
+            >
+              <Volume2 className="w-4 h-4" />
+              Listen
+            </button>
+          </div>
           <p className="text-sm text-gray-500 mt-0.5">
             This helps us match you to the right schemes
           </p>
@@ -393,87 +738,76 @@ export default function DemographicDetailsPage() {
 
       <main className="px-4 sm:px-6 py-5">
         <div className="max-w-sm mx-auto flex flex-col gap-4">
-{/* SECTION 0: Basic Info */}
-<Section
-  id="basic"
-  title="Basic Info"
-  icon={<Globe className="w-5 h-5" />}
-  isOpen={openSections.basic}
-  isComplete={basicComplete}
-  onToggle={toggleSection}
->
-  <Field label="First Name">
-    <input
-      type="text"
-      value={formData.firstName}
-      onChange={(e) => update("firstName", e.target.value)}
-      placeholder="e.g. Ramesh"
-      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-    />
-  </Field>
+          {/* SECTION 0: Basic Info */}
+          <Section
+            id="basic"
+            title="Basic Info"
+            icon={<Globe className="w-5 h-5" />}
+            isOpen={openSections.basic}
+            isComplete={basicComplete}
+            onToggle={toggleSection}
+          >
+            <Field label="First Name">
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => update("firstName", e.target.value)}
+                placeholder="e.g. Ramesh"
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
 
-  <Field label="Last Name">
-    <input
-      type="text"
-      value={formData.lastName}
-      onChange={(e) => update("lastName", e.target.value)}
-      placeholder="e.g. Kumar"
-      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-    />
-  </Field>
+            <Field label="Last Name">
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => update("lastName", e.target.value)}
+                placeholder="e.g. Kumar"
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
 
-  <Field label="Phone Number">
-    <div className="flex items-center gap-2 border border-gray-300 rounded-xl px-3 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100">
-      <span className="text-gray-700 font-medium text-base pr-2 border-r border-gray-300 h-[48px] flex items-center">
-        +91
-      </span>
-      <input
-        type="tel"
-        inputMode="numeric"
-        maxLength={10}
-        value={formData.phoneNumber}
-        onChange={(e) => update("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
-        placeholder="98765 43210"
-        className="flex-1 h-[48px] bg-transparent outline-none text-base text-gray-900"
-      />
-    </div>
-  </Field>
+            <Field label="Phone Number">
+              <div className="flex items-center gap-2 border border-gray-300 rounded-xl px-3 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100">
+                <span className="text-gray-700 font-medium text-base pr-2 border-r border-gray-300 h-[48px] flex items-center">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={formData.phoneNumber}
+                  onChange={(e) => update("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="98765 43210"
+                  className="flex-1 h-[48px] bg-transparent outline-none text-base text-gray-900"
+                />
+              </div>
+            </Field>
 
-  <Field label="Date of Birth">
-    <input
-      type="date"
-      value={formData.dob}
-      onChange={(e) => update("dob", e.target.value)}
-      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-    />
-  </Field>
+            <Field label="Date of Birth">
+              <input
+                type="date"
+                value={formData.dob}
+                onChange={(e) => update("dob", e.target.value)}
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
 
-  <Field label="Preferred Language">
-    <select
-      value={formData.language}
-      onChange={(e) => update("language", e.target.value)}
-      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 bg-white outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-    >
-      <option value="">Select language</option>
-      <option value="hi">हिंदी (Hindi)</option>
-      <option value="en">English</option>
-      <option value="mr">मराठी (Marathi)</option>
-      <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-    </select>
-  </Field>
 
-  <Field label="Aadhaar Number">
-  <input
-    type="text"
-    inputMode="numeric"
-    maxLength={12}
-    value={formData.aadhaarNumber}
-    onChange={(e) => update("aadhaarNumber", e.target.value.replace(/\D/g, "").slice(0, 12))}
-    placeholder="XXXX XXXX XXXX"
-    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 tracking-widest"
-  />
-</Field>
-</Section>
+
+            <Field label="Aadhaar Number">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={12}
+                value={formData.aadhaarNumber}
+                onChange={(e) => update("aadhaarNumber", e.target.value.replace(/\D/g, "").slice(0, 12))}
+                placeholder="XXXX XXXX XXXX"
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 tracking-widest"
+              />
+            </Field>
+          </Section>
+
           {/* SECTION 1: Demographic */}
           <Section
             id="demographic"
@@ -523,41 +857,42 @@ export default function DemographicDetailsPage() {
                 ]}
               />
             </Field>
+
             <Field label="Address">
-  <input
-    type="text"
-    value={formData.address}
-    onChange={(e) => update("address", e.target.value)}
-    placeholder="House no, street, village"
-    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-  />
-</Field>
+              <input
+                type="text"
+                value={formData.address}
+                onChange={(e) => update("address", e.target.value)}
+                placeholder="House no, street, village"
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
 
-<Field label="City">
-  <input
-    type="text"
-    value={formData.city}
-    onChange={(e) => update("city", e.target.value)}
-    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-  />
-</Field>
+            <Field label="City">
+              <input
+                type="text"
+                value={formData.city}
+                onChange={(e) => update("city", e.target.value)}
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
 
-<Field label="State">
-  <select
-    value={formData.state}
-    onChange={(e) => update("state", e.target.value)}
-    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 bg-white outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-  >
-    <option value="">Select state</option>
-    <option value="up">Uttar Pradesh</option>
-    <option value="bihar">Bihar</option>
-    <option value="bihar">Punjab</option>
-    <option value="mp">Madhya Pradesh</option>
-    <option value="rajasthan">Rajasthan</option>
-    <option value="maharashtra">Maharashtra</option>
-    {/* add remaining states/UTs */}
-  </select>
-</Field>
+            <Field label="State">
+              <select
+                value={formData.state}
+                onChange={(e) => update("state", e.target.value)}
+                className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 bg-white outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select state</option>
+                <option value="up">Uttar Pradesh</option>
+                <option value="bihar">Bihar</option>
+                <option value="punjab">Punjab</option>
+                <option value="mp">Madhya Pradesh</option>
+                <option value="rajasthan">Rajasthan</option>
+                <option value="maharashtra">Maharashtra</option>
+                {/* add remaining states/UTs */}
+              </select>
+            </Field>
 
             <Field label="Marital Status">
               <ChipGroup
@@ -665,16 +1000,16 @@ export default function DemographicDetailsPage() {
               />
             </Field>
             {formData.occupation === "other" && (
-  <Field label="Please specify your occupation">
-    <input
-      type="text"
-      value={formData.occupationOther}
-      onChange={(e) => update("occupationOther", e.target.value)}
-      placeholder="e.g. Tailor, Driver, Shopkeeper"
-      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-    />
-  </Field>
-)}
+              <Field label="Please specify your occupation">
+                <input
+                  type="text"
+                  value={formData.occupationOther}
+                  onChange={(e) => update("occupationOther", e.target.value)}
+                  placeholder="e.g. Tailor, Driver, Shopkeeper"
+                  className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                />
+              </Field>
+            )}
 
             <Field label="Do you own agricultural land?">
               <YesNoToggle
@@ -683,7 +1018,6 @@ export default function DemographicDetailsPage() {
               />
             </Field>
 
-            {/* Conditional field — only rendered when landOwned === true */}
             {formData.landOwned === true && (
               <Field label="Land Owned (in Acres)">
                 <input
@@ -725,10 +1059,60 @@ export default function DemographicDetailsPage() {
             </Field>
           </Section>
 
-          {/* Save & Next */}
+          {/* SECTION 5: Documents — Aadhaar required, rest gated on Aadhaar */}
+          <Section
+            id="documents"
+            title="Documents"
+            icon={<FileText className="w-5 h-5" />}
+            isOpen={openSections.documents}
+            isComplete={documentsComplete}
+            onToggle={toggleSection}
+          >
+            <p className="text-sm text-gray-500 mb-3">
+              Upload your Aadhaar Card first. Other documents unlock once it's verified.
+            </p>
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {(Object.keys(DOC_LABELS) as DocType[]).map((docType) => {
+                const locked = GATED_DOCS.includes(docType) && !aadhaarDone;
+                return (
+                  <DocChip
+                    key={docType}
+                    label={DOC_LABELS[docType]}
+                    active={selectedDocs.includes(docType)}
+                    done={docStates[docType].status === "done"}
+                    locked={locked}
+                    onClick={() => toggleDocSelection(docType)}
+                  />
+                );
+              })}
+            </div>
+
+            {!aadhaarDone && (
+              <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5" />
+                Income Certificate, Ration Card & KCC unlock after Aadhaar is verified
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3">
+              {selectedDocs.map((docType) => (
+                <DocumentUploadCard
+                  key={docType}
+                  docType={docType}
+                  state={docStates[docType]}
+                  onFileSelected={handleFileSelected}
+                  onRetake={handleRetake}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </div>
+          </Section>
+
+          {/* Continue */}
           <button
             type="button"
-            onClick={handleSaveAndNext}
+            onClick={handleContinue}
             disabled={!canSubmit || isSaving}
             className="mt-1 w-full min-h-[52px] rounded-xl bg-blue-700 text-white font-semibold text-base flex items-center justify-center gap-2 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
           >
@@ -738,13 +1122,15 @@ export default function DemographicDetailsPage() {
                 Saving...
               </>
             ) : (
-              "Save & Next"
+              "Continue to Dashboard"
             )}
           </button>
 
           {!canSubmit && (
             <p className="text-xs text-center text-gray-400 -mt-2">
-              Fill Demographic, Financial, and Occupation sections to continue
+              {!aadhaarDone
+                ? "Upload & verify your Aadhaar Card to continue"
+                : "Fill Demographic, Financial, and Occupation sections to continue"}
             </p>
           )}
         </div>
