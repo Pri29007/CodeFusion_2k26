@@ -1,5 +1,6 @@
-# Python virtual environment
+# Python virtual environments
 automation/venv/
+venv/
 
 # Python cache
 __pycache__/
@@ -14,6 +15,11 @@ mock-portals/node_modules/
 # Build files
 dist/
 build/
+
+# Sample/test files
+sample_audio/
+sample_docs/
+*.wav
 
 # OS files
 .DS_Store
