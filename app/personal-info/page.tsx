@@ -550,6 +550,12 @@ export default function DemographicDetailsPage() {
   const router = useRouter();
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const fileRefs = useRef<Record<DocType, File | null>>({
+    aadhaar: null,
+    income: null,
+    ration: null,
+    kcc: null,
+  });
   const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
     basic: true,
     demographic: false,
@@ -608,6 +614,7 @@ export default function DemographicDetailsPage() {
   }
 
   function handleFileSelected(docType: DocType, file: File) {
+    fileRefs.current[docType] = file;
     const previewUrl = URL.createObjectURL(file);
 
     setDocStates((prev) => ({
@@ -670,27 +677,65 @@ export default function DemographicDetailsPage() {
     }
   }
 
-  function handleContinue() {
+  async function handleContinue() {
     if (!canSubmit) return;
     setIsSaving(true);
 
-    // ---------------------------------------------------------------
-    // TODO (backend): replace this mock delay with real API calls, e.g.
-    //
-    // const res = await fetch("/api/profile", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify(formData),
-    // });
-    // if (!res.ok) { setIsSaving(false); /* show error toast */ return; }
-    //
-    // Then, if applicable, a final "onboarding complete" call, e.g.
-    // POST /api/applications/submit, before navigating.
-    // ---------------------------------------------------------------
-    setTimeout(() => {
+    const aadhaarFile = fileRefs.current.aadhaar;
+    if (!aadhaarFile) {
       setIsSaving(false);
+      return;
+    }
+
+    const form = new FormData();
+    form.append("aadhaar_number", formData.aadhaarNumber);
+    form.append("first_name", formData.firstName);
+    form.append("last_name", formData.lastName);
+    form.append("phone_number", formData.phoneNumber);
+    form.append("date_of_birth", formData.dob);
+    form.append("age", String(formData.age));
+    form.append("gender", formData.gender);
+    if (formData.category) form.append("category", formData.category);
+    if (formData.maritalStatus) form.append("marital_status", formData.maritalStatus);
+    if (formData.address) form.append("address", formData.address);
+    if (formData.city) form.append("city", formData.city);
+    if (formData.state) form.append("state", formData.state);
+    if (formData.rationCard) form.append("ration_card_type", formData.rationCard);
+    if (formData.income) form.append("annual_income_range", formData.income);
+    if (formData.housing) form.append("housing_type", formData.housing);
+    if (formData.rooms != null) form.append("number_of_rooms", String(formData.rooms));
+    if (formData.familyMembers != null) form.append("family_members_dependents", String(formData.familyMembers));
+    const occupationValue =
+      formData.occupation === "Other" && formData.occupationOther
+        ? formData.occupationOther
+        : formData.occupation;
+    if (occupationValue) form.append("occupation", occupationValue);
+    if (formData.landOwned != null) form.append("owns_agricultural_land", String(formData.landOwned));
+    if (formData.landAcres) form.append("land_area_acres", String(formData.landAcres));
+    if (formData.disability != null) form.append("disability_status", String(formData.disability));
+    if (formData.chronicIllness != null) form.append("chronic_illness_or_pregnant", String(formData.chronicIllness));
+    form.append("aadhaar_doc", aadhaarFile);
+
+    try {
+      const res = await fetch("http://localhost:8000/users/", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        console.error("Signup failed:", errorData);
+        setIsSaving(false);
+        return;
+      }
+
+      const user = await res.json();
+      console.log("User created:", user);
       router.push("/dashboard");
-    }, 1200);
+    } catch (err) {
+      console.error("Network error:", err);
+      setIsSaving(false);
+    }
   }
 
   function handleListen() {
