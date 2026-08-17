@@ -10,7 +10,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey("users.aadhaar_number"))
+    user_id = Column("aadhaar_number", ForeignKey("users.aadhaar_number"))
     doc_type = Column(String)
     file_url = Column(String)
     file_type = Column(String)

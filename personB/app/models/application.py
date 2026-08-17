@@ -18,7 +18,7 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, ForeignKey("users.aadhaar_number"))
+    user_id = Column("aadhaar_number", ForeignKey("users.aadhaar_number"))
     scheme_name = Column(String, nullable=False)
     status = Column(String, default="draft")
     form_data = Column(JSONB)

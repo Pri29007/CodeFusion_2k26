@@ -13,7 +13,7 @@ and auth_id is kept separately to match against Supabase Auth's
 login system.
 """
 
-from sqlalchemy import Column, String, DateTime, Date, Integer, Numeric
+from sqlalchemy import Column, String, DateTime, Date, Integer, Numeric, Boolean
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -28,17 +28,23 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     date_of_birth = Column(Date)
+    age = Column(Integer)
     gender = Column(String)
     preferred_language = Column(String, default="hi")
+    category = Column(String)
+    marital_status = Column(String)
     address = Column(String)
     city = Column(String)
     state = Column(String)
-    category = Column(String)
+    ration_card_type = Column(String)
+    annual_income_range = Column(String)
+    housing_type = Column(String)
+    number_of_rooms = Column(Integer)
+    family_members_dependents = Column(Integer)
     occupation = Column(String)
-    family_members_under_18 = Column(Integer)
-    annual_income = Column(Numeric)
-    bank_account_number = Column(String)
-    bank_ifsc = Column(String)
+    owns_agricultural_land = Column(Boolean)
+    disability_status = Column(Boolean)
+    chronic_illness_or_pregnant = Column(Boolean)
     aadhaar_doc_url = Column(String)
     aadhaar_doc_type = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
