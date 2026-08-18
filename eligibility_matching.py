@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from langchain_groq import ChatGroq
 
 from config import GROQ_API_KEY, GROQ_MODEL, AUTOMATABLE_SCHEMES
-from document_extraction import ExtractedProfile
+from profile_mapper import CitizenProfile
 
 
 class SchemeVerdict(BaseModel):
@@ -81,43 +81,12 @@ def _flag_automatable(verdict: SchemeVerdict) -> bool:
     return False
 
 
-def match_eligibility(profile: ExtractedProfile) -> EligibilityResult:
+def match_eligibility(profile: CitizenProfile) -> EligibilityResult:
     profile_text = profile.model_dump_json(indent=2)
-
-    llm = ChatGroq(api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0)
+    llm = ChatGroq(api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0, max_tokens=1024)
     structured_llm = llm.with_structured_output(EligibilityResult)
-
-    prompt = MATCHING_PROMPT.format(
-        profile=profile_text,
-        schema=EligibilityResult.model_json_schema(),
-    )
-
+    prompt = MATCHING_PROMPT.format(profile=profile_text, schema=EligibilityResult.model_json_schema())
     result = structured_llm.invoke(prompt)
-
     for v in result.verdicts:
         v.is_automatable = _flag_automatable(v)
-
     return result
-
-
-if __name__ == "__main__":
-    sample = ExtractedProfile(
-        full_name="Ramesh Kumar",
-        age=42,
-        annual_income=250000,
-        owns_land=True,
-        land_area_acres=2.5,
-        owns_pucca_house=False,
-        is_government_employee=False,
-        pays_income_tax=False,
-        caste_category="OBC",
-        state="Maharashtra",
-    )
-    result = match_eligibility(sample)
-    for v in result.verdicts:
-        status = "ELIGIBLE" if v.eligible else "NOT ELIGIBLE"
-        auto = " 🤖 AUTOMATABLE" if v.is_automatable else ""
-        print(f"\n{v.scheme_name} [{v.level}]{auto}: {status} ({v.confidence})")
-        print(f"  Reason: {v.reason}")
-        if v.missing_info:
-            print(f"  Missing: {v.missing_info}")
