@@ -1,6 +1,6 @@
 sample_audio/
 sample_docs/
 *.wav
-__pycache__/
+Agent/__pycache__/
 venv/
-.env
+Agent/.env

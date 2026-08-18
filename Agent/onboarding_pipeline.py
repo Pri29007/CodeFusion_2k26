@@ -38,7 +38,10 @@ def run_scheme_matching_for_user(aadhaar_number: str) -> dict:
     # 1. Eligibility matching
     result = match_eligibility(profile)
     save_eligibility_results(aadhaar_number, result)
-
+    result = match_eligibility(profile)
+    print("\n--- RAW ELIGIBILITY RESULT ---")
+    print(result.model_dump_json(indent=2))
+    save_eligibility_results(aadhaar_number, result)
     # 2. Voice summary
     eligible = result.eligible_schemes
     if eligible:
@@ -49,15 +52,19 @@ def run_scheme_matching_for_user(aadhaar_number: str) -> dict:
 
     local_wav_path = os.path.join(TEMP_AUDIO_DIR, f"{uuid.uuid4()}.wav")
     english_to_voice_output(summary_text, preferred_language, local_wav_path)
-
-    audio_url = upload_audio_and_get_url(aadhaar_number, local_wav_path, preferred_language)
-    update_user_audio_url(aadhaar_number, audio_url)
-
-    os.remove(local_wav_path)  # clean up local temp file after upload
-
+    print(f"✅ Local audio generated at: {local_wav_path}")
+    try:
+        audio_url = upload_audio_and_get_url(aadhaar_number, local_wav_path, preferred_language)
+        update_user_audio_url(aadhaar_number, audio_url)
+        print(f"✅ Audio uploaded to Supabase: {audio_url}")
+    except Exception as e:
+        print(f"⚠️  Audio upload failed (likely missing 'eligibility-audio' bucket): {e}")
+        audio_url = None  # don't crash — return what we have
     return {
         "status": "completed",
         "aadhaar_number": aadhaar_number,
         "eligible_count": len(eligible),
+        "eligibility": result.model_dump(),
         "audio_url": audio_url,
+        "local_audio_path": local_wav_path,  # useful for local listening even without Storage
     }

@@ -12,9 +12,9 @@ entry in config.py, not touching this matching logic.
 import json
 from typing import Literal
 from pydantic import BaseModel, Field
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-from config import GROQ_API_KEY, GROQ_MODEL, AUTOMATABLE_SCHEMES
+from config import GEMINI_API_KEY, GEMINI_MODEL, AUTOMATABLE_SCHEMES
 from profile_mapper import CitizenProfile
 
 
@@ -43,34 +43,39 @@ class EligibilityResult(BaseModel):
     def automatable_eligible_schemes(self) -> list[SchemeVerdict]:
         return [v for v in self.verdicts if v.eligible and v.is_automatable]
 
-
 MATCHING_PROMPT = """
-You are an expert on Indian government welfare schemes — central and state level —
-covering housing, healthcare, agriculture, education, disability, and income support.
+You are an expert on Indian government welfare schemes — central and state level.
 
-Given the citizen profile below, identify EVERY scheme they are likely eligible for,
-based on standard, well-documented eligibility criteria for schemes like (but not
-limited to) PM-KISAN, PMAY, Ayushman Bharat/PM-JAY, National Scholarship schemes,
-disability pension schemes, and relevant state-level schemes for their state if known.
+Given the citizen profile below, identify UP TO 6 schemes they are most likely
+eligible for — prioritize the most relevant and highest-confidence matches,
+not exhaustive coverage.
 
 Rules:
 - Only include schemes you have reasonable confidence actually exist with real criteria.
-  Do not invent scheme names.
-- If the citizen's state is known, prioritize including relevant state schemes, marked
-  with level="state".
-- For each scheme, give a plain-language reason a non-technical citizen can understand.
-- If information is missing that would change the verdict, note it in missing_info
-  rather than guessing.
-- Aim for thoroughness — a citizen should see every scheme they may qualify for, not
-  just the most famous ones.
+- Do not invent scheme names.
+- If the citizen's state is known, include at most 2 relevant state schemes.
+- Give a plain-language reason in ONE sentence.
+- If information is missing that would change the verdict, note it briefly in missing_info.
 
 CITIZEN PROFILE:
 {profile}
 
-Return ONLY valid JSON matching this schema, no prose outside the JSON:
-{schema}
-"""
+Respond with ONLY a valid JSON object in exactly this format (no markdown, no extra text):
 
+{{
+  "verdicts": [
+    {{
+      "scheme_name": "PM-KISAN",
+      "category": "Agriculture",
+      "level": "central",
+      "eligible": true,
+      "confidence": "high",
+      "reason": "Short plain-language reason here.",
+      "missing_info": []
+    }}
+  ]
+}}
+"""
 
 def _flag_automatable(verdict: SchemeVerdict) -> bool:
     """Keyword match against our 3 mock-portal schemes — case-insensitive, no exact-name dependency."""
@@ -80,13 +85,48 @@ def _flag_automatable(verdict: SchemeVerdict) -> bool:
             return True
     return False
 
-
 def match_eligibility(profile: CitizenProfile) -> EligibilityResult:
     profile_text = profile.model_dump_json(indent=2)
-    llm = ChatGroq(api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0, max_tokens=1024)
-    structured_llm = llm.with_structured_output(EligibilityResult)
-    prompt = MATCHING_PROMPT.format(profile=profile_text, schema=EligibilityResult.model_json_schema())
-    result = structured_llm.invoke(prompt)
+
+    llm = ChatGoogleGenerativeAI(
+    google_api_key=GEMINI_API_KEY,
+    model=GEMINI_MODEL,
+    temperature=0,
+    max_tokens=4096,          # was 1024 — thinking eats into this budget too
+    thinking_level="medium",     # Gemini 3 uses this, not thinking_budget
+    response_mime_type="application/json",
+    )
+
+    prompt = MATCHING_PROMPT.format(profile=profile_text)
+    response = llm.invoke(prompt)
+
+    # response.content can be a plain string OR a list of content blocks,
+    # depending on the model/SDK version — handle both.
+    content = response.content
+    if isinstance(content, list):
+        raw = "".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and not block.get("thought", False)
+        )
+    else:
+        raw = content
+
+    raw = raw.strip()
+
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip()
+
+    if not raw:
+        raise ValueError("LLM returned empty response — check model name and prompt length")
+
+    data = json.loads(raw)
+    result = EligibilityResult(**data)
+
     for v in result.verdicts:
         v.is_automatable = _flag_automatable(v)
+
     return result
