@@ -299,6 +299,7 @@ export default function DashboardPage() {
         )}
       </section>
 
+      {/* Documents uploaded during onboarding (personal-info page) */}
       <section className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
           Documents Uploaded

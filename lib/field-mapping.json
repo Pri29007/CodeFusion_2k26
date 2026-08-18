@@ -267,7 +267,7 @@
       "backendField": "aadhaar_doc",
       "backendType": "file (PDF/JPEG/PNG, max 10MB)",
       "required": true,
-      "notes": "Handled on the doc-upload screen (app/dashboard/doc-upload), not on personal-info. Must be included in the same POST /users/ form-data submission, or the flow needs to hold it in state until the final submit step."
+      "notes": "Handled inside the Documents section of the personal-info page (merged from the old standalone doc-upload screen). Must be included in the same POST /users/ form-data submission alongside the rest of the profile fields."
     },
     {
       "backendField": "bank_account_number",
