@@ -1,0 +1,285 @@
+{
+  "$description": "Maps every field on the Personal Info form (app/dashboard/personal-info) to the backend API fields defined in the Backend API Reference. Use this to know what to send to POST /users/, in what shape, and which UI fields currently have no backend counterpart yet.",
+  "backendBaseUrl": "http://localhost:8000",
+  "primaryEndpoint": {
+    "method": "POST",
+    "path": "/users/",
+    "contentType": "multipart/form-data",
+    "note": "Sent as form-data (not JSON) because it includes a file upload (aadhaar_doc). Use FormData in JS, not JSON.stringify."
+  },
+
+  "sections": [
+    {
+      "sectionId": "basicInfo",
+      "sectionLabel": "Basic Info",
+      "fields": [
+        {
+          "uiFieldId": "firstName",
+          "uiLabel": "First Name",
+          "inputType": "text",
+          "backendField": "first_name",
+          "backendType": "text",
+          "required": true
+        },
+        {
+          "uiFieldId": "lastName",
+          "uiLabel": "Last Name",
+          "inputType": "text",
+          "backendField": "last_name",
+          "backendType": "text",
+          "required": true
+        },
+        {
+          "uiFieldId": "phoneNumber",
+          "uiLabel": "Phone Number",
+          "inputType": "tel",
+          "backendField": "phone_number",
+          "backendType": "text",
+          "required": true,
+          "notes": "UI shows a fixed +91 prefix + 10-digit input. Backend just expects a text string — decide whether to send with or without the +91 prefix and stay consistent."
+        },
+        {
+          "uiFieldId": "dateOfBirth",
+          "uiLabel": "Date of Birth",
+          "inputType": "date",
+          "backendField": "date_of_birth",
+          "backendType": "date",
+          "required": true,
+          "notes": "Backend requires format YYYY-MM-DD. The native <input type=\"date\"> value is already YYYY-MM-DD, so no conversion needed as long as you read e.target.value directly (don't reformat to dd-mm-yyyy for submission)."
+        },
+        {
+          "uiFieldId": "preferredLanguage",
+          "uiLabel": "Preferred Language",
+          "inputType": "select",
+          "backendField": "preferred_language",
+          "backendType": "text",
+          "required": false,
+          "notes": "Optional, backend defaults to \"hi\" if omitted. Backend doesn't document an allowed-values list — send whatever code your dropdown uses (e.g. \"hi\", \"en\") consistently."
+        },
+        {
+          "uiFieldId": "aadhaarNumber",
+          "uiLabel": "Aadhaar Number",
+          "inputType": "text",
+          "backendField": "aadhaar_number",
+          "backendType": "text",
+          "required": true,
+          "notes": "This also doubles as the user's primary key (user_id) for every other endpoint: GET /users/{aadhaar_number}, POST /documents/upload, POST /applications/, etc."
+        }
+      ]
+    },
+
+    {
+      "sectionId": "demographicDetails",
+      "sectionLabel": "Demographic Details",
+      "fields": [
+        {
+          "uiFieldId": "age",
+          "uiLabel": "Age",
+          "inputType": "number",
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No 'age' field exists in the backend user schema. Either drop this field, or compute it locally from date_of_birth for display/scheme-matching purposes only — don't submit it to POST /users/."
+        },
+        {
+          "uiFieldId": "gender",
+          "uiLabel": "Gender",
+          "inputType": "toggle-group",
+          "options": ["Male", "Female", "Other"],
+          "backendField": "gender",
+          "backendType": "text",
+          "required": true
+        },
+        {
+          "uiFieldId": "socialCategory",
+          "uiLabel": "Social Category",
+          "inputType": "toggle-group",
+          "options": ["General", "OBC", "SC", "ST", "EWS"],
+          "backendField": "category",
+          "backendType": "text",
+          "required": false,
+          "notes": "Backend restricts this to exactly: General, OBC, SC, ST, EWS — matches the UI options as-is."
+        },
+        {
+          "uiFieldId": "address",
+          "uiLabel": "Address",
+          "inputType": "text",
+          "backendField": "address",
+          "backendType": "text",
+          "required": false
+        },
+        {
+          "uiFieldId": "city",
+          "uiLabel": "City",
+          "inputType": "text",
+          "backendField": "city",
+          "backendType": "text",
+          "required": false
+        },
+        {
+          "uiFieldId": "state",
+          "uiLabel": "State",
+          "inputType": "select",
+          "backendField": "state",
+          "backendType": "text",
+          "required": false
+        },
+        {
+          "uiFieldId": "maritalStatus",
+          "uiLabel": "Marital Status",
+          "inputType": "toggle-group",
+          "options": ["Single", "Married", "Widowed"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet. Keep it local for now or flag to Akshara/backend owner to add it to the user schema."
+        }
+      ]
+    },
+
+    {
+      "sectionId": "financialHousehold",
+      "sectionLabel": "Financial & Household",
+      "fields": [
+        {
+          "uiFieldId": "rationCardType",
+          "uiLabel": "Ration Card Type",
+          "inputType": "toggle-group",
+          "options": ["None", "BPL", "AAY", "PHH"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        },
+        {
+          "uiFieldId": "estimatedAnnualFamilyIncome",
+          "uiLabel": "Estimated Annual Family Income",
+          "inputType": "toggle-group",
+          "options": ["Under \u20b91L", "\u20b91L\u20132.5L", "\u20b92.5L+"],
+          "backendField": "annual_income",
+          "backendType": "number",
+          "required": false,
+          "notes": "Backend wants a NUMBER, but the UI is bucketed. Needs a conversion step before submit — e.g. map each bucket to a representative number (0, 100000, 250000) or midpoint. Recommend agreeing the exact mapping with backend before wiring this up, since it affects scheme-eligibility logic downstream."
+        },
+        {
+          "uiFieldId": "housingType",
+          "uiLabel": "Housing Type",
+          "inputType": "toggle-group",
+          "options": ["Kutcha (Mud/Thatch)", "Pucca (Brick/Cement)"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        },
+        {
+          "uiFieldId": "numberOfRooms",
+          "uiLabel": "Number of Rooms",
+          "inputType": "stepper",
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        },
+        {
+          "uiFieldId": "familyMembersDependents",
+          "uiLabel": "Family Members / Dependents",
+          "inputType": "stepper",
+          "backendField": "family_members_under_18",
+          "backendType": "number",
+          "required": false,
+          "notes": "CAUTION — likely semantic mismatch, not just a naming difference. Backend field is specifically 'family members under 18', but the UI field is a general dependents/family-size counter with no age filter. Confirm with backend before mapping directly, or split the UI into two counters (total family members vs. members under 18)."
+        }
+      ]
+    },
+
+    {
+      "sectionId": "occupationAssets",
+      "sectionLabel": "Occupation & Assets",
+      "fields": [
+        {
+          "uiFieldId": "primaryOccupation",
+          "uiLabel": "Primary Occupation",
+          "inputType": "toggle-group",
+          "options": ["Farmer", "Agri. Laborer", "Artisan", "Street Vendor", "Unemployed", "Other"],
+          "backendField": "occupation",
+          "backendType": "text",
+          "required": false,
+          "notes": "Backend just stores free text, not restricted to a fixed list — send the selected option label (or a slug of it) as-is."
+        },
+        {
+          "uiFieldId": "ownsAgriculturalLand",
+          "uiLabel": "Do you own agricultural land?",
+          "inputType": "toggle-group",
+          "options": ["Yes", "No"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        }
+      ]
+    },
+
+    {
+      "sectionId": "healthVulnerabilities",
+      "sectionLabel": "Health & Vulnerabilities",
+      "optional": true,
+      "fields": [
+        {
+          "uiFieldId": "disabilityStatus",
+          "uiLabel": "Disability Status (Divyangjan)",
+          "inputType": "toggle-group",
+          "options": ["Yes", "No"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        },
+        {
+          "uiFieldId": "chronicIllnessOrPregnant",
+          "uiLabel": "Chronic illness / pregnant woman in household",
+          "inputType": "toggle-group",
+          "options": ["Yes", "No"],
+          "backendField": null,
+          "backendType": null,
+          "required": false,
+          "unmapped": true,
+          "notes": "No backend field yet."
+        }
+      ]
+    }
+  ],
+
+  "backendFieldsNotOnThisForm": [
+    {
+      "backendField": "auth_id",
+      "backendType": "text",
+      "required": true,
+      "notes": "Placeholder UUID, real login not wired up yet. Don't show this to the user — generate it client-side, e.g. crypto.randomUUID(), and send it silently with the submit."
+    },
+    {
+      "backendField": "aadhaar_doc",
+      "backendType": "file (PDF/JPEG/PNG, max 10MB)",
+      "required": true,
+      "notes": "Handled inside the Documents section of the personal-info page (merged from the old standalone doc-upload screen). Must be included in the same POST /users/ form-data submission alongside the rest of the profile fields."
+    },
+    {
+      "backendField": "bank_account_number",
+      "backendType": "text",
+      "required": false,
+      "notes": "Not present anywhere in the current form screens — add a field if/when this is needed."
+    },
+    {
+      "backendField": "bank_ifsc",
+      "backendType": "text",
+      "required": false,
+      "notes": "Not present anywhere in the current form screens — add a field if/when this is needed."
+    }
+  ]
+}
