@@ -731,6 +731,8 @@ export default function DemographicDetailsPage() {
 
       const user = await res.json();
       console.log("User created:", user);
+      localStorage.setItem("aadhaar_number", user.aadhaar_number);
+      localStorage.setItem("first_name", user.first_name);
       router.push("/dashboard");
     } catch (err) {
       console.error("Network error:", err);

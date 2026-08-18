@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
@@ -12,7 +12,6 @@ import {
   Menu,
   Volume2,
 } from "lucide-react";
-import { USER } from "../../lib/mock-data";
 
 const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -38,22 +37,6 @@ const NAV_ITEMS = [
   },
 ] as const;
 
-// Header title/subtitle per route — add an entry here whenever you add a page.
-const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/dashboard": {
-    title: `Welcome, ${USER.name.split(" ")[0]}`,
-    subtitle: "Your profile and uploaded documents",
-  },
-  "/dashboard/schemes": {
-    title: "Eligible Schemes",
-    subtitle: "Matched to your profile",
-  },
-  "/dashboard/status": {
-    title: "Current Application Status",
-    subtitle: "Track applications you've submitted",
-  },
-};
-
 export default function DashboardLayout({
   children,
 }: {
@@ -61,6 +44,27 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [firstName, setFirstName] = useState("User");
+
+  useEffect(() => {
+    const storedName = localStorage.getItem("first_name");
+    if (storedName) setFirstName(storedName);
+  }, []);
+
+  const PAGE_META: Record<string, { title: string; subtitle: string }> = {
+    "/dashboard": {
+      title: `Welcome, ${firstName}`,
+      subtitle: "Your profile and uploaded documents",
+    },
+    "/dashboard/schemes": {
+      title: "Eligible Schemes",
+      subtitle: "Matched to your profile",
+    },
+    "/dashboard/status": {
+      title: "Current Application Status",
+      subtitle: "Track applications you've submitted",
+    },
+  };
 
   const meta = PAGE_META[pathname] ?? PAGE_META["/dashboard"];
 
