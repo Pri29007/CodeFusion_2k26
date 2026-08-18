@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Shared civic palette */
+  --color-navy-950: #071A2E;
+  --color-navy-900: #0B2A47;
+  --color-navy-800: #0F3A62;
+  --color-navy-700: #144E82;
+  --color-navy-100: #E4ECF4;
+  --color-navy-50: #F4F7FA;
+
+  --color-saffron-600: #C97A1E;
+  --color-saffron-500: #E08A1E;
+  --color-saffron-100: #FCEBD3;
+
+  --color-paper: #F7F8FA;
+  --color-ink: #142433;
+
+  --color-success-700: #14603C;
+  --color-success-500: #1E7B4D;
+  --color-success-100: #E3F3EA;
+
+  --color-danger-600: #B23B3B;
+  --color-danger-100: #FBE6E6;
+
+  /* Scheme accents */
+  --color-kisan-700: #1F5C3B;
+  --color-kisan-600: #2F7D4F;
+  --color-kisan-100: #E3F2E9;
+
+  --color-pmay-700: #8A3B22;
+  --color-pmay-600: #B5502E;
+  --color-pmay-100: #F5E5DE;
+
+  --color-ayush-700: #0B5F67;
+  --color-ayush-600: #0E7C86;
+  --color-ayush-100: #DDF0F1;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}

@@ -1,0 +1,60 @@
+{
+  "personal": {
+    "full_name": "Test User",
+    "dob": "1995-01-01",
+    "gender": "Male",
+    "mobile": "9999999999",
+    "aadhaar": "1234 1234 1234",
+    "address": "123 Demo Street, Test Nagar",
+    "state": "Delhi",
+    "district": "New Delhi",
+    "village": "Demo Village"
+  },
+
+  "pm_kisan": {
+    "land_record_id": "LAND123",
+    "survey_number": "SURVEY456",
+    "land_area": "2",
+    "land_location": "North Field",
+    "land_district": "New Delhi",
+    "land_state": "Delhi",
+
+    "account_holder_name": "Test User",
+    "bank_name": "Demo National Bank",
+    "account_number": "000111222333",
+    "ifsc_code": "DEMO0001234"
+  },
+
+  "pmay": {
+    "family_member_count": "2",
+    "family_members": [
+      { "name": "Test Spouse", "age": "34", "relationship": "Spouse" },
+      { "name": "Test Child", "age": "8", "relationship": "Daughter" }
+    ],
+
+    "annual_income": "180000",
+    "occupation": "Daily Wage Worker",
+    "employment_status": "Daily wage",
+
+    "housing_type": "Kutcha",
+    "ownership_status": "No house owned",
+    "living_conditions": "Single-room rented accommodation, shared facilities.",
+
+    "account_holder_name": "Test User",
+    "bank_name": "Demo National Bank",
+    "account_number": "000111222333",
+    "ifsc_code": "DEMO0001234"
+  },
+
+  "ayushman": {
+    "family_size": "3",
+    "family_members": [
+      { "name": "Test Spouse", "age": "34", "relationship": "Spouse" },
+      { "name": "Test Child", "age": "8", "relationship": "Daughter" }
+    ],
+
+    "income_category": "BPL",
+    "occupation": "Daily Wage Worker",
+    "household_category": "Rural"
+  }
+}
