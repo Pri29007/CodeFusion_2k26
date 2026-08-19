@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Poppins, Noto_Sans } from "next/font/google";
+import {useEffect} from "react";
+import{ playStaticAudio, type Lang} from "../../lib/audio";
 import {
   ChevronDown,
   ChevronUp,
@@ -550,6 +552,15 @@ export default function DemographicDetailsPage() {
   const router = useRouter();
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
+  const hasPlayedWelcome = useRef(false);
+
+  useEffect(() => {
+    if (hasPlayedWelcome.current) return;
+    hasPlayedWelcome.current = true;
+
+    const storedLang = (localStorage.getItem("preferred_language") as Lang) || "en";
+    playStaticAudio("welcome", storedLang);
+  }, []);
   const fileRefs = useRef<Record<DocType, File | null>>({
     aadhaar: null,
     income: null,
@@ -694,6 +705,8 @@ export default function DemographicDetailsPage() {
     form.append("phone_number", formData.phoneNumber);
     form.append("date_of_birth", formData.dob);
     form.append("age", String(formData.age));
+    const preferredLanguage = localStorage.getItem("preferred_language") || "hi";
+    form.append("preferred_language", preferredLanguage);
     form.append("gender", formData.gender);
     if (formData.category) form.append("category", formData.category);
     if (formData.maritalStatus) form.append("marital_status", formData.maritalStatus);
@@ -741,13 +754,8 @@ export default function DemographicDetailsPage() {
   }
 
   function handleListen() {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel(); // stop any previous playback
-    const utterance = new SpeechSynthesisUtterance(
-      "Tell us about yourself. This helps us match you to the right schemes. Fill in your basic info, demographic details, financial and household details, occupation, and upload your Aadhaar card."
-    );
-    utterance.lang = "hi-IN"; // swap based on formData language pick if kept elsewhere
-    window.speechSynthesis.speak(utterance);
+    const storedLang = (localStorage.getItem("preferred_language") as Lang) || "en";
+    playStaticAudio("welcome", storedLang);
   }
 
   return (

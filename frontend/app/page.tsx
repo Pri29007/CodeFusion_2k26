@@ -4,7 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import { Poppins, Noto_Sans } from "next/font/google";
 import { Mic, Phone, ShieldCheck, Volume2, ArrowLeft, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
-
+import { useEffect } from "react";
+import { playStaticAudio } from "../lib/audio";
 /**
  * Fonts
  * - Poppins: display/heading face — clean geometric shapes, reads confidently at small
@@ -54,6 +55,7 @@ const COPY = {
   listen: "Listen",
 };
 
+
 const LANGUAGE_OPTIONS: { code: Lang; label: string; nativeLabel: string }[] = [
   { code: "en", label: "English", nativeLabel: "English" },
   { code: "hi", label: "Hindi", nativeLabel: "हिंदी" },
@@ -98,8 +100,9 @@ export default function LoginPage() {
   }
 
   function handleLanguageContinue() {
-    if (!lang) return;
-    setStep("phone");
+  if (!lang) return;
+  setStep("phone");
+  playStaticAudio("mobilenumberverify", lang);
   }
 
   function handleGetOtp() {
@@ -137,20 +140,47 @@ export default function LoginPage() {
   // Placeholder TTS hook — reads the current step's key copy aloud.
   // Wire up to a real speech engine later; for now just a stub so the
   // button has somewhere to call into.
-  function handleListen() {
-    const utteranceText =
-      step === "language"
-        ? `${t.langStepTitle}. ${t.langStepSubtitle}`
-        : step === "phone"
-        ? t.phoneLabel
-        : t.otpLabel(formatPhoneDisplay(phone));
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+async function handleListen() {
+  const langCode = lang ?? "en";
+
+  if (step === "language") {
+    return;
+  }
+  if (step === "phone") {
+    playStaticAudio("mobilenumberverify", langCode);
+    return;
+  }
+
+  // otp step — no static audio recorded for this yet, fall back to dynamic TTS
+  const utteranceText = t.otpLabel(formatPhoneDisplay(phone));
+
+  try {
+    const formData = new FormData();
+    formData.append("text", utteranceText);
+    formData.append("lang_code", langCode);
+
+    const res = await fetch(`${API_BASE}/voice/speak`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) throw new Error("TTS request failed");
+
+    const audioBlob = await res.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    audio.play();
+  } catch (err) {
+    console.error("Backend TTS failed, falling back to browser speech:", err);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(utteranceText);
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     }
   }
+}
 
   return (
     <div
@@ -203,7 +233,10 @@ export default function LoginPage() {
                     <button
                       key={opt.code}
                       type="button"
-                      onClick={() => setLang(opt.code)}
+                      onClick={() => {
+                        setLang(opt.code);
+                        localStorage.setItem("preferred_language", opt.code);
+                      }}
                       className={`w-full min-h-[56px] rounded-xl border px-4 flex items-center justify-between transition-colors ${
                         lang === opt.code
                           ? "border-blue-600 bg-blue-50"

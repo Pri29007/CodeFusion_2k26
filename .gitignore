@@ -6,3 +6,4 @@ venv/
 Agent/.env
 node_modules/
 .next/
+static_audio.zip
