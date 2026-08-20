@@ -58,11 +58,13 @@ type FormData = {
   address: string;
   city: string;
   state: string;
+  district: string;
+  village: string;
   rationCard: string;
   income: string;
   housing: string;
   rooms: number;
-  familyMembers: number;
+  familyMemberCount: number;
   under18Members: number;
   occupation: string;
   occupationOther: string;
@@ -70,12 +72,28 @@ type FormData = {
   landAcres: string;
   disability: boolean | null;
   chronicIllness: boolean | null;
+
+  landRecordId: string;
+  surveyNumber: string;
+  landLocation: string;
+
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+
+  familyMembers: { name: string; age: string; relationship: string }[];
+
+  employmentStatus: string;
+  ownershipStatus: string;
+  livingConditions: string;
+  incomeCategory: string;
+  householdCategory: string;
 };
 
 const initialFormData: FormData = {
   firstName: "",
   lastName: "",
-
   dob: "",
 
   aadhaarNumber: "",
@@ -86,11 +104,13 @@ const initialFormData: FormData = {
   address: "",
   city: "",
   state: "",
+  district: "",
+  village: "",
   rationCard: "",
   income: "",
   housing: "",
   rooms: 1,
-  familyMembers: 1,
+  familyMemberCount: 1,
   under18Members: 0,
   occupation: "",
   occupationOther: "",
@@ -98,6 +118,23 @@ const initialFormData: FormData = {
   landAcres: "",
   disability: null,
   chronicIllness: null,
+
+  landRecordId: "",
+  surveyNumber: "",
+  landLocation: "",
+
+  accountHolderName: "",
+  bankName: "",
+  accountNumber: "",
+  ifscCode: "",
+
+  familyMembers: [],
+
+  employmentStatus: "",
+  ownershipStatus: "",
+  livingConditions: "",
+  incomeCategory: "",
+  householdCategory: "",
 };
 
 type SectionId =
@@ -106,6 +143,9 @@ type SectionId =
   | "financial"
   | "occupation"
   | "health"
+  | "land"
+  | "bank"
+  | "family"
   | "documents";
 
 /* -------------------------------------------------------------------------
@@ -572,6 +612,9 @@ export default function DemographicDetailsPage() {
     financial: false,
     occupation: false,
     health: false,
+    land: false,
+    bank: false,
+    family: false,
     documents: false,
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -687,6 +730,7 @@ export default function DemographicDetailsPage() {
 
     const form = new FormData();
     form.append("aadhaar_number", formData.aadhaarNumber);
+    form.append("phone_number", localStorage.getItem("phone_number") ?? "");
     form.append("first_name", formData.firstName);
     form.append("last_name", formData.lastName);
 
@@ -700,11 +744,26 @@ export default function DemographicDetailsPage() {
     if (formData.address) form.append("address", formData.address);
     if (formData.city) form.append("city", formData.city);
     if (formData.state) form.append("state", formData.state);
+    if (formData.district) form.append("district", formData.district);
+if (formData.village) form.append("village", formData.village);
+if (formData.accountHolderName) form.append("account_holder_name", formData.accountHolderName);
+if (formData.bankName) form.append("bank_name", formData.bankName);
+if (formData.accountNumber) form.append("account_number", formData.accountNumber);
+if (formData.ifscCode) form.append("ifsc_code", formData.ifscCode);
+if (formData.landRecordId) form.append("land_record_id", formData.landRecordId);
+if (formData.surveyNumber) form.append("survey_number", formData.surveyNumber);
+if (formData.landLocation) form.append("land_location", formData.landLocation);
+if (formData.employmentStatus) form.append("employment_status", formData.employmentStatus);
+if (formData.ownershipStatus) form.append("ownership_status", formData.ownershipStatus);
+if (formData.livingConditions) form.append("living_conditions", formData.livingConditions);
+if (formData.incomeCategory) form.append("income_category", formData.incomeCategory);
+if (formData.householdCategory) form.append("household_category", formData.householdCategory);
+if (formData.familyMembers.length > 0) form.append("family_members", JSON.stringify(formData.familyMembers));
     if (formData.rationCard) form.append("ration_card_type", formData.rationCard);
     if (formData.income) form.append("annual_income_range", formData.income);
     if (formData.housing) form.append("housing_type", formData.housing);
     if (formData.rooms != null) form.append("number_of_rooms", String(formData.rooms));
-    if (formData.familyMembers != null) form.append("family_members_dependents", String(formData.familyMembers));
+    if (formData.familyMemberCount != null) form.append("family_members_dependents", String(formData.familyMemberCount));
     const occupationValue =
       formData.occupation === "Other" && formData.occupationOther
         ? formData.occupationOther
@@ -927,7 +986,14 @@ export default function DemographicDetailsPage() {
                 className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
               />
             </Field>
-
+<Field label="District">
+  <input type="text" value={formData.district} onChange={(e) => update("district", e.target.value)}
+    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+</Field>
+<Field label="Village">
+  <input type="text" value={formData.village} onChange={(e) => update("village", e.target.value)}
+    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+</Field>
             <Field label="State">
               <select
                 value={formData.state}
@@ -942,6 +1008,42 @@ export default function DemographicDetailsPage() {
                 <option value="rajasthan">Rajasthan</option>
                 <option value="maharashtra">Maharashtra</option>
                 {/* add remaining states/UTs */}
+                              <option value="andhra_pradesh">Andhra Pradesh</option>
+              <option value="arunachal_pradesh">Arunachal Pradesh</option>
+              <option value="assam">Assam</option>
+              
+              <option value="chhattisgarh">Chhattisgarh</option>
+              <option value="goa">Goa</option>
+              <option value="gujarat">Gujarat</option>
+              <option value="haryana">Haryana</option>
+              <option value="himachal_pradesh">Himachal Pradesh</option>
+              <option value="jharkhand">Jharkhand</option>
+              <option value="karnataka">Karnataka</option>
+              <option value="kerala">Kerala</option>
+              
+              
+              <option value="manipur">Manipur</option>
+              <option value="meghalaya">Meghalaya</option>
+              <option value="mizoram">Mizoram</option>
+              <option value="nagaland">Nagaland</option>
+              <option value="odisha">Odisha</option>
+              <option value="punjab">Punjab</option>
+              <option value="rajasthan">Rajasthan</option>
+              <option value="sikkim">Sikkim</option>
+              <option value="tamil_nadu">Tamil Nadu</option>
+              <option value="telangana">Telangana</option>
+              <option value="tripura">Tripura</option>
+             
+              <option value="uttarakhand">Uttarakhand</option>
+              <option value="west_bengal">West Bengal</option>
+              <option value="andaman_nicobar">Andaman & Nicobar Islands</option>
+              <option value="chandigarh">Chandigarh</option>
+              <option value="dnh_dd">Dadra & Nagar Haveli and Daman & Diu</option>
+              <option value="delhi">Delhi (NCT)</option>
+              <option value="jammu_kashmir">Jammu & Kashmir</option>
+              <option value="ladakh">Ladakh</option>
+              <option value="lakshadweep">Lakshadweep</option>
+             <option value="puducherry">Puducherry</option>
               </select>
             </Field>
 
@@ -1018,8 +1120,8 @@ export default function DemographicDetailsPage() {
 
             <Field label="Family Members / Dependents">
               <Stepper
-                value={formData.familyMembers}
-                onChange={(v) => update("familyMembers", v)}
+                    value={formData.familyMemberCount}
+                    onChange={(v) => update("familyMemberCount", v)}
                 min={1}
                 max={25}
               />
@@ -1082,8 +1184,153 @@ export default function DemographicDetailsPage() {
                   className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                 />
               </Field>
+
+              
             )}
+            <Field label="Employment Status">
+  <input type="text" value={formData.employmentStatus} onChange={(e) => update("employmentStatus", e.target.value)}
+    placeholder="e.g. Daily wage, Salaried, Self-employed"
+    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+</Field>
+<Field label="Income Category">
+  <ChipGroup
+    columns={3}
+    value={formData.incomeCategory}
+    onChange={(v) => update("incomeCategory", v)}
+    options={[
+      { label: "BPL", value: "BPL" },
+      { label: "APL", value: "APL" },
+      { label: "EWS", value: "EWS" },
+    ]}
+  />
+</Field>
+<Field label="Household Category">
+  <ChipGroup
+    columns={2}
+    value={formData.householdCategory}
+    onChange={(v) => update("householdCategory", v)}
+    options={[
+      { label: "Rural", value: "Rural" },
+      { label: "Urban", value: "Urban" },
+    ]}
+  />
+</Field>
+<Field label="Ownership Status">
+  <input type="text" value={formData.ownershipStatus} onChange={(e) => update("ownershipStatus", e.target.value)}
+    placeholder="e.g. No house owned, Owns house"
+    className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+</Field>
+<Field label="Living Conditions" helper="Brief description of current housing situation">
+  <textarea value={formData.livingConditions} onChange={(e) => update("livingConditions", e.target.value)}
+    rows={3}
+    className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+</Field>
           </Section>
+
+{/* SECTION: Land Details */}
+<Section
+  id="land"
+  title="Land Details"
+  icon={<Home className="w-5 h-5" />}
+  isOpen={openSections.land}
+  isComplete={!!formData.landRecordId}
+  optional
+  onToggle={toggleSection}
+>
+  <Field label="Land Record ID">
+    <input type="text" value={formData.landRecordId} onChange={(e) => update("landRecordId", e.target.value)}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+  <Field label="Survey Number">
+    <input type="text" value={formData.surveyNumber} onChange={(e) => update("surveyNumber", e.target.value)}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+  <Field label="Land Location">
+    <input type="text" value={formData.landLocation} onChange={(e) => update("landLocation", e.target.value)}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+</Section>
+
+{/* SECTION: Bank Details */}
+<Section
+  id="bank"
+  title="Bank Details"
+  icon={<Home className="w-5 h-5" />}
+  isOpen={openSections.bank}
+  isComplete={!!formData.accountNumber}
+  optional
+  onToggle={toggleSection}
+>
+  <Field label="Account Holder Name">
+    <input type="text" value={formData.accountHolderName} onChange={(e) => update("accountHolderName", e.target.value)}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+  <Field label="Bank Name">
+    <input type="text" value={formData.bankName} onChange={(e) => update("bankName", e.target.value)}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+  <Field label="Account Number">
+    <input type="text" inputMode="numeric" value={formData.accountNumber}
+      onChange={(e) => update("accountNumber", e.target.value.replace(/\D/g, ""))}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+  <Field label="IFSC Code">
+    <input type="text" value={formData.ifscCode} onChange={(e) => update("ifscCode", e.target.value.toUpperCase())}
+      className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" />
+  </Field>
+</Section>
+
+{/* SECTION: Family Members */}
+<Section
+  id="family"
+  title="Family Members"
+  icon={<User className="w-5 h-5" />}
+  isOpen={openSections.family}
+  isComplete={formData.familyMembers.length > 0}
+  optional
+  onToggle={toggleSection}
+>
+  {formData.familyMembers.map((member, idx) => (
+    <div key={idx} className="mb-4 p-3 border border-gray-200 rounded-xl">
+      <div className="flex justify-between items-center mb-2">
+        <p className="text-xs font-semibold text-gray-500">Member {idx + 1}</p>
+        <button type="button"
+          onClick={() => update("familyMembers", formData.familyMembers.filter((_, i) => i !== idx))}
+          className="text-xs text-red-500 font-medium">
+          Remove
+        </button>
+      </div>
+      <input type="text" placeholder="Name" value={member.name}
+        onChange={(e) => {
+          const updated = [...formData.familyMembers];
+          updated[idx] = { ...updated[idx], name: e.target.value };
+          update("familyMembers", updated);
+        }}
+        className="w-full min-h-[44px] px-3 mb-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-blue-600" />
+      <div className="grid grid-cols-2 gap-2">
+        <input type="number" placeholder="Age" value={member.age}
+          onChange={(e) => {
+            const updated = [...formData.familyMembers];
+            updated[idx] = { ...updated[idx], age: e.target.value };
+            update("familyMembers", updated);
+          }}
+          className="min-h-[44px] px-3 rounded-lg border border-gray-300 text-sm outline-none focus:border-blue-600" />
+        <input type="text" placeholder="Relationship" value={member.relationship}
+          onChange={(e) => {
+            const updated = [...formData.familyMembers];
+            updated[idx] = { ...updated[idx], relationship: e.target.value };
+            update("familyMembers", updated);
+          }}
+          className="min-h-[44px] px-3 rounded-lg border border-gray-300 text-sm outline-none focus:border-blue-600" />
+      </div>
+    </div>
+  ))}
+  <button type="button"
+    onClick={() => update("familyMembers", [...formData.familyMembers, { name: "", age: "", relationship: "" }])}
+    className="w-full min-h-[44px] rounded-xl border-2 border-dashed border-gray-300 text-gray-600 text-sm font-medium">
+    + Add Family Member
+  </button>
+</Section>
 
           {/* SECTION 4: Health (optional) */}
           <Section
