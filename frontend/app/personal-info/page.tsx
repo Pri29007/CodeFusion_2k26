@@ -656,18 +656,6 @@ export default function DemographicDetailsPage() {
         }, 1500); // verify animation duration, 1-2s
       }, 1400);
     }, 1000);
-
-    // -----------------------------------------------------------------
-    // TODO (backend): replace this mocked sequence with a real upload.
-    //
-    // const form = new FormData();
-    // form.append("file", file);
-    // form.append("docType", docType);
-    // const res = await fetch("/api/documents", { method: "POST", body: form });
-    // const { extractedFields } = await res.json();
-    // -> then set status "done" only once the real response comes back,
-    //    and surface extractedFields for the user to confirm/correct.
-    // -----------------------------------------------------------------
   }
 
   function handleRetake(docType: DocType) {
@@ -746,6 +734,33 @@ export default function DemographicDetailsPage() {
       console.log("User created:", user);
       localStorage.setItem("aadhaar_number", user.aadhaar_number);
       localStorage.setItem("first_name", user.first_name);
+
+      // Upload any other staged documents (Ration Card, Income Certificate, KCC)
+      // now that the user record exists in the backend.
+      const otherDocTypes: DocType[] = ["income", "ration", "kcc"];
+      for (const docType of otherDocTypes) {
+        const file = fileRefs.current[docType];
+        if (!file) continue;
+
+        const docForm = new FormData();
+        docForm.append("user_id", user.aadhaar_number);
+        docForm.append("doc_type", docType);
+        docForm.append("file", file);
+
+        try {
+          const docRes = await fetch("http://localhost:8000/documents/upload", {
+            method: "POST",
+            body: docForm,
+          });
+          if (!docRes.ok) {
+            const errData = await docRes.json().catch(() => null);
+            console.error(`Failed to upload ${docType}:`, errData);
+          }
+        } catch (err) {
+          console.error(`Network error uploading ${docType}:`, err);
+        }
+      }
+
       router.push("/dashboard");
     } catch (err) {
       console.error("Network error:", err);
@@ -847,8 +862,6 @@ export default function DemographicDetailsPage() {
                 className="w-full min-h-[48px] px-4 rounded-xl border border-gray-300 text-base text-gray-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
               />
             </Field>
-
-
 
             <Field label="Aadhaar Number">
               <input

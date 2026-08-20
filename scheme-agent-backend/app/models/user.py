@@ -13,7 +13,7 @@ and auth_id is kept separately to match against Supabase Auth's
 login system.
 """
 
-from sqlalchemy import Column, String, DateTime, Date, Integer, Numeric, Boolean
+from sqlalchemy import Column, String, DateTime, Date, Integer, Numeric, Boolean, JSON
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -51,3 +51,20 @@ class User(Base):
     land_area_acres = Column(Numeric)
     educational_background = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # --- Added for mock-portal automation / scheme applications ---
+    district = Column(String)
+    village = Column(String)
+    account_holder_name = Column(String)
+    bank_name = Column(String)
+    account_number = Column(String)
+    ifsc_code = Column(String)
+    land_record_id = Column(String)
+    survey_number = Column(String)
+    land_location = Column(String)
+    employment_status = Column(String)
+    ownership_status = Column(String)
+    living_conditions = Column(String)
+    income_category = Column(String)
+    household_category = Column(String)
+    family_members = Column(JSON)

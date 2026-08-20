@@ -3,6 +3,7 @@ User routes — creating a user account, which includes uploading
 their Aadhaar document once at signup.
 """
 
+import json
 import os
 import sys
 import uuid
@@ -63,6 +64,22 @@ async def create_user(
     owns_pucca_house: Optional[bool] = Form(None),
     land_area_acres: Optional[float] = Form(None),
     educational_background: Optional[str] = Form(None),
+    # --- Added for mock-portal automation / scheme applications ---
+    district: Optional[str] = Form(None),
+    village: Optional[str] = Form(None),
+    account_holder_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    land_record_id: Optional[str] = Form(None),
+    survey_number: Optional[str] = Form(None),
+    land_location: Optional[str] = Form(None),
+    employment_status: Optional[str] = Form(None),
+    ownership_status: Optional[str] = Form(None),
+    living_conditions: Optional[str] = Form(None),
+    income_category: Optional[str] = Form(None),
+    household_category: Optional[str] = Form(None),
+    family_members: Optional[str] = Form(None),  # JSON string, e.g. '[{"name": "...", "age": "...", "relationship": "..."}]'
     db: Session = Depends(get_db),
 ):
     existing = db.query(User).filter(User.aadhaar_number == aadhaar_number).first()
@@ -84,6 +101,15 @@ async def create_user(
         storage_path, contents, {"content-type": aadhaar_doc.content_type, "upsert": "true"}
     )
     aadhaar_doc_url = f"{os.getenv('SUPABASE_URL')}/storage/v1/object/user-documents/{storage_path}"
+
+    # family_members arrives as a JSON string (if provided at all) — parse it
+    # back into a Python list/dict so SQLAlchemy can store it as JSONB.
+    parsed_family_members = None
+    if family_members:
+        try:
+            parsed_family_members = json.loads(family_members)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="family_members must be valid JSON.")
 
     new_user = User(
         aadhaar_number=aadhaar_number,
@@ -114,6 +140,21 @@ async def create_user(
         owns_pucca_house=owns_pucca_house,
         land_area_acres=land_area_acres,
         educational_background=educational_background,
+        district=district,
+        village=village,
+        account_holder_name=account_holder_name,
+        bank_name=bank_name,
+        account_number=account_number,
+        ifsc_code=ifsc_code,
+        land_record_id=land_record_id,
+        survey_number=survey_number,
+        land_location=land_location,
+        employment_status=employment_status,
+        ownership_status=ownership_status,
+        living_conditions=living_conditions,
+        income_category=income_category,
+        household_category=household_category,
+        family_members=parsed_family_members,
     )
     db.add(new_user)
     db.commit()
@@ -147,7 +188,8 @@ def get_all_documents_for_user(aadhaar_number: str, db: Session = Depends(get_db
 
     other_documents = db.query(Document).filter(Document.user_id == aadhaar_number).all()
 
-    return {
+    return{
+
         "aadhaar": {
             "doc_type": "aadhaar",
             "file_url": user.aadhaar_doc_url,

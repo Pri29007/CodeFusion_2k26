@@ -21,6 +21,7 @@ class Application(Base):
     user_id = Column("aadhaar_number", ForeignKey("users.aadhaar_number"))
     scheme_name = Column(String, nullable=False)
     status = Column(String, default="draft")
+    application_status = Column(String, default="not applied")
     form_data = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
