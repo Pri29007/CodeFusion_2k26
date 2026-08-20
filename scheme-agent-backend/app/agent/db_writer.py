@@ -14,6 +14,7 @@ import os
 from typing import Optional
 
 from supabase import create_client, Client
+from supabase.client import ClientOptions  # <-- added
 
 from eligibility_matching import EligibilityResult
 
@@ -31,6 +32,10 @@ AUDIO_BUCKET = "static-audio"
 def get_client() -> Client:
     """
     Create and return a Supabase client.
+
+    Timeouts are set explicitly — without them, a stalled network call
+    (e.g. to PostgREST or Storage) hangs the calling thread forever with
+    no exception and no log line, which is very hard to debug.
     """
 
     if not SUPABASE_URL:
@@ -39,7 +44,14 @@ def get_client() -> Client:
     if not SUPABASE_KEY:
         raise RuntimeError("SUPABASE_KEY environment variable is not set.")
 
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY,
+        options=ClientOptions(
+            postgrest_client_timeout=10,
+            storage_client_timeout=30,
+        ),
+    )
 
 
 # -------------------------------------------------------------------

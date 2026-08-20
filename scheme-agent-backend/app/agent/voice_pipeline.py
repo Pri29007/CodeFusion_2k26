@@ -4,6 +4,10 @@ hear responses back in that language. The LLM always reasons in English — this
 module only translates at the boundary, and skips translation entirely when the
 citizen's language already is English.
 """
+import os
+# os.environ["HF_HUB_OFFLINE"] = "1"
+# os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 import torch
 import soundfile as sf
 from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
@@ -21,7 +25,9 @@ def _get_translation_model():
     global _translation_model, _translation_tokenizer
     if _translation_model is None:
         _translation_tokenizer = AutoTokenizer.from_pretrained(TRANSLATION_MODEL)
-        _translation_model = AutoModelForSeq2SeqLM.from_pretrained(TRANSLATION_MODEL).to(_DEVICE)
+        _translation_model = AutoModelForSeq2SeqLM.from_pretrained(
+            TRANSLATION_MODEL,
+        ).to(_DEVICE)
     return _translation_model, _translation_tokenizer
 
 

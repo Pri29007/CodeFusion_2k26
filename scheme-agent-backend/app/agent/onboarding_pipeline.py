@@ -37,8 +37,6 @@ def run_scheme_matching_for_user(aadhaar_number: str) -> dict:
 
     # 1. Eligibility matching
     result = match_eligibility(profile)
-    save_eligibility_results(aadhaar_number, result)
-    result = match_eligibility(profile)
     print("\n--- RAW ELIGIBILITY RESULT ---")
     print(result.model_dump_json(indent=2))
     save_eligibility_results(aadhaar_number, result)
