@@ -23,8 +23,6 @@ agent_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "agen
 sys.path.insert(0, agent_path)
 
 from onboarding_pipeline import run_scheme_matching_for_user
-
-router = APIRouter(prefix="/users", tags=["users"])
 router = APIRouter(prefix="/users", tags=["users"])
 
 ALLOWED_TYPES = {"application/pdf": "pdf", "image/jpeg": "jpeg", "image/jpg": "jpeg", "image/png": "png"}
@@ -38,6 +36,7 @@ supabase = create_client(
 
 @router.post("/")
 async def create_user(
+    background_tasks: BackgroundTasks,
     aadhaar_number: str = Form(...),
     first_name: str = Form(...),
     last_name: str = Form(...),
@@ -160,15 +159,7 @@ async def create_user(
     db.commit()
     db.refresh(new_user)
 
-    # Synchronous call — no Celery/Redis. Signup waits a few seconds for
-    # eligibility matching + voice summary to finish before returning.
-    try:
-        run_scheme_matching_for_user(new_user.aadhaar_number)
-    except Exception as e:
-        # Don't fail the whole signup if eligibility matching has an issue —
-        # the user account is already created; log and move on.
-        print(f"⚠️  Eligibility matching failed for {new_user.aadhaar_number}: {e}")
-
+    background_tasks.add_task(run_scheme_matching_for_user, new_user.aadhaar_number)
     return new_user
 
 

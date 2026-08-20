@@ -48,7 +48,6 @@ const notoSans = Noto_Sans({
 type FormData = {
   firstName: string;
   lastName: string;
-  phoneNumber: string;
   dob: string;
 
   aadhaarNumber: string;
@@ -76,7 +75,7 @@ type FormData = {
 const initialFormData: FormData = {
   firstName: "",
   lastName: "",
-  phoneNumber: "",
+
   dob: "",
 
   aadhaarNumber: "",
@@ -596,7 +595,7 @@ export default function DemographicDetailsPage() {
 
   // Section completion checks — used only to show the check-mark badge.
   const basicComplete =
-    !!formData.firstName && !!formData.lastName && !!formData.phoneNumber && !!formData.dob ;
+    !!formData.firstName && !!formData.lastName && !!formData.dob ;
   const demographicComplete =
     !!formData.age && !!formData.gender && !!formData.category && !!formData.maritalStatus;
   const financialComplete =
@@ -690,7 +689,7 @@ export default function DemographicDetailsPage() {
     form.append("aadhaar_number", formData.aadhaarNumber);
     form.append("first_name", formData.firstName);
     form.append("last_name", formData.lastName);
-    form.append("phone_number", formData.phoneNumber);
+
     form.append("date_of_birth", formData.dob);
     form.append("age", String(formData.age));
     const preferredLanguage = localStorage.getItem("preferred_language") || "hi";
@@ -837,22 +836,6 @@ export default function DemographicDetailsPage() {
               />
             </Field>
 
-            <Field label="Phone Number">
-              <div className="flex items-center gap-2 border border-gray-300 rounded-xl px-3 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100">
-                <span className="text-gray-700 font-medium text-base pr-2 border-r border-gray-300 h-[48px] flex items-center">
-                  +91
-                </span>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={formData.phoneNumber}
-                  onChange={(e) => update("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="98765 43210"
-                  className="flex-1 h-[48px] bg-transparent outline-none text-base text-gray-900"
-                />
-              </div>
-            </Field>
 
             <Field label="Date of Birth">
               <input
