@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ShieldCheck, ArrowRight, Loader2, Check, BadgeCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ShieldCheck, ArrowRight, Loader2, Check, BadgeCheck, Volume2 } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 
 type SchemeVerdict = {
@@ -109,6 +109,28 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
 export default function SchemesPage() {
   const [schemes, setSchemes] = useState<SchemeVerdict[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+const audioRef = useRef<HTMLAudioElement | null>(null);
+
+function handleListen() {
+  const aadhaar = localStorage.getItem("aadhaar_number");
+  const lang = localStorage.getItem("preferred_language") || "hi";
+  if (!aadhaar) return;
+
+  const url = `https://fphpuyadffaxkgdkmeua.supabase.co/storage/v1/object/public/static-audio/${aadhaar}/summary_${lang}.wav`;
+
+  if (audioRef.current) {
+    audioRef.current.pause();
+  }
+  const audio = new Audio(url);
+  audioRef.current = audio;
+  setIsPlaying(true);
+  audio.play().catch((err) => {
+    console.error("Audio playback failed:", err);
+    setIsPlaying(false);
+  });
+  audio.onended = () => setIsPlaying(false);
+}
 
   useEffect(() => {
     const aadhaar = localStorage.getItem("aadhaar_number");
@@ -140,15 +162,32 @@ export default function SchemesPage() {
         setSchemes(mapped.filter((s) => s.eligible));
         setLoading(false);
       });
+
+    handleListen();
   }, []);
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-600" />
-        <h2 className="font-[family-name:var(--font-display)] font-bold text-slate-900 text-base sm:text-lg">
-          Schemes You Qualify For
-        </h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-600" />
+          <h2 className="font-[family-name:var(--font-display)] font-bold text-slate-900 text-base sm:text-lg">
+            Schemes You Qualify For
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={handleListen}
+          disabled={isPlaying}
+          className="shrink-0 min-h-[40px] px-4 rounded-full bg-blue-900 text-white text-sm font-semibold flex items-center gap-2 active:bg-blue-800 disabled:opacity-60"
+        >
+          {isPlaying ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Volume2 className="w-4 h-4" />
+          )}
+          Listen
+        </button>
       </div>
 
       {loading && (
