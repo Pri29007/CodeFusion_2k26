@@ -107,12 +107,12 @@ def apply_pm_kisan(page, user_data: dict) -> dict:
         print(f"PM-KISAN application submitted: {application_id} ({status})")
 
         return {
-            "success": True,
-            "scheme": "pm_kisan",
-            "application_id": application_id,
-            "status": status,
-        }
-
+    "success": True,
+    "scheme": "pm_kisan",
+    "application_id": application_id,
+    "aadhaar_number": user_data["personal"]["aadhaar"],
+    "status": status
+}
     except Exception as error:
         print(f"PM-KISAN automation failed: {error}")
         return {

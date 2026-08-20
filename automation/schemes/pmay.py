@@ -136,6 +136,7 @@ def apply_pmay(page, user_data: dict) -> dict:
             "success": True,
             "scheme": "pmay",
             "application_id": application_id,
+            "aadhaar_number": user_data["personal"]["aadhaar"],
             "status": status,
         }
 

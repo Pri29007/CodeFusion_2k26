@@ -130,6 +130,7 @@ def apply_ayushman(page, user_data: dict) -> dict:
             "success": True,
             "scheme": "ayushman",
             "application_id": application_id,
+            "aadhaar_number": user_data["personal"]["aadhaar"],
             "status": status,
         }
 

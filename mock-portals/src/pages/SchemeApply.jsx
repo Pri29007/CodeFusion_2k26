@@ -211,6 +211,12 @@ function SuccessPanel({ scheme, result, accent }) {
           {result.applicationId}
         </p>
       </div>
+       <div className="mt-4 rounded-md border border-dashed border-slate-300 bg-navy-50 px-5 py-4">
+  <p className="text-xs uppercase tracking-wide text-slate-500">Aadhaar Number</p>
+  <p data-testid="aadhaar-number" className="mt-1 font-display text-xl font-bold tracking-wide text-navy-950">
+    {result.formData.aadhaar}
+  </p>
+</div>
 
       <div className="mt-4 flex items-center justify-center gap-2 text-sm">
         <span className="text-slate-500">Current Status:</span>
@@ -231,6 +237,7 @@ function SuccessPanel({ scheme, result, accent }) {
           Back to Home
         </Link>
       </div>
+     
     </div>
   );
 }
