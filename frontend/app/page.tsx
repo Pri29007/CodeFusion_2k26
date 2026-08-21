@@ -134,6 +134,7 @@ export default function LoginPage() {
 
   function handleVerifyOtp() {
     if (!isOtpComplete) return;
+    localStorage.setItem("phone_number", phone);
     router.push("/personal-info");
   }
 
