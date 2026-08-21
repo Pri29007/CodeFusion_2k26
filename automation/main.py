@@ -136,6 +136,7 @@ SCHEME_FUNCTIONS = {
     "pm_kisan": apply_pm_kisan,
     "pmay": apply_pmay,
     "ayushman": apply_ayushman,
+    
 }
 
 
@@ -178,6 +179,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run scheme application automation.")
     parser.add_argument("scheme", nargs="?", default="pm_kisan", help="Scheme to run: pm_kisan, pmay, or ayushman")
     parser.add_argument("--aadhaar", default=None, help="Aadhaar number to fetch real user data from the backend")
+    parser.add_argument("--application-id", default=None)
     args = parser.parse_args()
+    
 
     run_automation(args.scheme, args.aadhaar)
