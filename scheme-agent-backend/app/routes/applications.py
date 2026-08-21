@@ -90,3 +90,55 @@ def get_fill_data_for_application(application_id: str, db: Session = Depends(get
 @router.get("/user/{user_id}")
 def list_applications_for_user(user_id: str, db: Session = Depends(get_db)):
     return db.query(Application).filter(Application.user_id == user_id).all()
+
+class StatusUpdate(BaseModel):
+    automation_status: str
+
+@router.patch("/{application_id}/automation-status")
+def update_automation_status(application_id: str, payload: StatusUpdate, db: Session = Depends(get_db)):
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    application.automation_status = payload.automation_status
+    db.commit()
+    db.refresh(application)
+    return application
+
+import subprocess
+import sys
+import os
+
+AUTOMATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "automation"))
+
+@router.post("/{application_id}/apply")
+def trigger_automation(application_id: str, db: Session = Depends(get_db)):
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    scheme_map = {
+        "PM-KISAN": "pm_kisan",
+        "PMAY": "pmay",
+        "Ayushman Bharat": "ayushman",
+    }
+    scheme_key = scheme_map.get(application.scheme_name, "pm_kisan")
+
+    application.automation_status = "in_progress"
+    db.commit()
+
+    result = subprocess.run(
+        [sys.executable, "main.py", scheme_key, "--aadhaar", application.user_id, "--application-id", str(application.id)],
+        cwd=AUTOMATION_DIR,
+        capture_output=True,
+        text=True,
+    )
+
+    application.automation_status = "completed" if result.returncode == 0 else "failed"
+    db.commit()
+    db.refresh(application)
+
+    return {
+        "application": application,
+        "automation_output": result.stdout,
+        "automation_errors": result.stderr,
+    }

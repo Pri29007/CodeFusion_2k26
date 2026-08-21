@@ -25,3 +25,4 @@ class Application(Base):
     form_data = Column(JSONB)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
+    automation_status = Column(String, default="not_started")
