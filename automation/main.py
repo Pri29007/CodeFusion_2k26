@@ -139,7 +139,7 @@ SCHEME_FUNCTIONS = {
 }
 
 
-def run_automation(scheme: str, aadhaar_number: str | None):
+def run_automation(scheme: str, aadhaar_number: str | None, application_id: str | None = None):
     if scheme not in SCHEME_FUNCTIONS:
         print(f"Unknown scheme '{scheme}'. Choose one of: {', '.join(SCHEME_FUNCTIONS)}")
         return
@@ -173,6 +173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run scheme application automation.")
     parser.add_argument("scheme", nargs="?", default="pm_kisan", help="Scheme to run: pm_kisan, pmay, or ayushman")
     parser.add_argument("--aadhaar", default=None, help="Aadhaar number to fetch real user data from the backend")
+    parser.add_argument("--application-id", default=None, help="Application UUID, used to report status back to the backend")
     args = parser.parse_args()
 
-    run_automation(args.scheme, args.aadhaar)
+    run_automation(args.scheme, args.aadhaar, args.application_id)
