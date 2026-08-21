@@ -142,3 +142,35 @@ def trigger_automation(application_id: str, db: Session = Depends(get_db)):
         "automation_output": result.stdout,
         "automation_errors": result.stderr,
     }
+
+class PendingInputRequest(BaseModel):
+    input_type: str  # "otp" or "captcha"
+    image_url: str | None = None
+
+@router.post("/{application_id}/request-input")
+def request_input(application_id: str, payload: PendingInputRequest, db: Session = Depends(get_db)):
+    """Called by Person D's automation script when it hits a CAPTCHA/OTP wall."""
+    app_row = db.query(Application).filter(Application.id == application_id).first()
+    if not app_row:
+        raise HTTPException(404, "Application not found")
+    app_row.pending_input_type = payload.input_type
+    app_row.pending_input_image_url = payload.image_url
+    app_row.pending_input_resolved = False
+    app_row.pending_input_value = None
+    db.commit()
+    return {"status": "waiting_for_input"}
+
+
+class SubmitInputRequest(BaseModel):
+    value: str
+
+@router.post("/{application_id}/submit-input")
+def submit_input(application_id: str, payload: SubmitInputRequest, db: Session = Depends(get_db)):
+    """Called by the frontend once the user types the OTP/CAPTCHA answer."""
+    app_row = db.query(Application).filter(Application.id == application_id).first()
+    if not app_row:
+        raise HTTPException(404, "Application not found")
+    app_row.pending_input_value = payload.value
+    app_row.pending_input_resolved = True
+    db.commit()
+    return {"status": "submitted"}
