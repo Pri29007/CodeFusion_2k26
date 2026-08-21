@@ -7,3 +7,5 @@ Agent/.env
 node_modules/
 .next/
 static_audio.zip
+
+static_audio_new.zip
