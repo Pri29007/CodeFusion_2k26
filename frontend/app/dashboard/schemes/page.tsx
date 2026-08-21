@@ -30,12 +30,60 @@ function formatFieldName(field: string) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+type PendingInput = {
+  type: "otp" | "captcha" | null;
+  imageUrl: string | null;
+};
+
 function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
   const [fillState, setFillState] = useState<FillState>("idle");
+  const [pending, setPending] = useState<PendingInput>({ type: null, imageUrl: null });
+  const [inputValue, setInputValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  async function pollApplication() {
+    try {
+      const res = await fetch(`http://localhost:8000/applications/${scheme.application_id}`);
+      if (!res.ok) return;
+      const app = await res.json();
+
+      if (app.pending_input_type && !app.pending_input_resolved) {
+        setPending({ type: app.pending_input_type, imageUrl: app.pending_input_image_url ?? null });
+      } else {
+        setPending({ type: null, imageUrl: null });
+      }
+
+      if (app.status === "submitted" || app.status === "approved" || app.status === "rejected") {
+        stopPolling();
+        setFillState("done");
+      }
+    } catch (err) {
+      console.error("Polling failed:", err);
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollApplication();
+    pollRef.current = setInterval(pollApplication, 3000);
+  }
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
 
   async function handleAutoFill() {
     if (fillState !== "idle") return;
-
+    setErrorMsg(null);
     setFillState("filling");
 
     try {
@@ -46,18 +94,47 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
 
       if (!res.ok) {
         console.error("Automation failed:", await res.text());
+        setErrorMsg("Couldn't start application. Try again.");
         setFillState("idle");
         return;
       }
 
-      const result = await res.json();
-      console.log("Automation result:", result);
-      setFillState("done");
+      startPolling();
     } catch (err) {
       console.error("Network error triggering automation:", err);
+      setErrorMsg("Network error. Try again.");
       setFillState("idle");
     }
-}
+  }
+
+  async function handleSubmitInput() {
+    if (!inputValue) return;
+    setErrorMsg(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch(
+        `http://localhost:8000/applications/${scheme.application_id}/submit-input`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: inputValue }),
+        }
+      );
+      if (!res.ok) {
+        console.error("submit-input failed:", await res.text());
+        setErrorMsg("Submission failed. Check your entry and try again.");
+        setSubmitting(false);
+        return;
+      }
+      setPending({ type: null, imageUrl: null });
+      setInputValue("");
+      setSubmitting(false);
+    } catch (err) {
+      console.error("Network error submitting input:", err);
+      setErrorMsg("Network error. Try again.");
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col gap-2.5">
@@ -66,23 +143,16 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
           <h3 className="font-[family-name:var(--font-display)] font-bold text-slate-900 text-sm leading-snug">
             {scheme.scheme_name}
           </h3>
-
           <span className="shrink-0 text-xs font-semibold text-blue-900 bg-blue-50 border border-blue-100 rounded-full px-2.5 py-1 capitalize">
             {scheme.level}
           </span>
         </div>
-
-        <p className="text-sm text-slate-500 mt-1">
-          {scheme.category}
-        </p>
+        <p className="text-sm text-slate-500 mt-1">{scheme.category}</p>
       </div>
 
       <div className="flex items-start gap-1.5 bg-slate-50 rounded-lg px-2.5 py-2">
         <ShieldCheck className="w-3.5 h-3.5 text-blue-900 shrink-0 mt-0.5" />
-
-        <p className="text-[11px] text-slate-600 leading-relaxed">
-          {scheme.reason}
-        </p>
+        <p className="text-[11px] text-slate-600 leading-relaxed">{scheme.reason}</p>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -90,7 +160,6 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
           <BadgeCheck className="w-3 h-3" />
           Eligible
         </span>
-
         <span className="text-[11px] font-medium text-slate-500 bg-slate-100 rounded-full px-2 py-0.5 capitalize">
           Confidence: {scheme.confidence}
         </span>
@@ -109,6 +178,37 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
         </div>
       )}
 
+      {pending.type && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col gap-2">
+          {pending.type === "captcha" && pending.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={pending.imageUrl} alt="CAPTCHA" className="rounded border border-slate-200 max-h-20 object-contain" />
+          )}
+          <p className="text-[11px] font-semibold text-amber-800">
+            {pending.type === "otp" ? "Enter OTP sent to your phone" : "Enter the CAPTCHA text shown above"}
+          </p>
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className="min-h-[38px] px-3 rounded-lg border border-amber-300 text-sm outline-none focus:border-blue-600"
+            placeholder={pending.type === "otp" ? "4-6 digit OTP" : "CAPTCHA text"}
+          />
+          <button
+            type="button"
+            onClick={handleSubmitInput}
+            disabled={submitting || !inputValue}
+            className="min-h-[36px] rounded-lg bg-blue-900 text-white text-xs font-semibold disabled:opacity-60"
+          >
+            {submitting ? "Submitting..." : "Submit"}
+          </button>
+        </div>
+      )}
+
+      {errorMsg && (
+  <p className="text-[11px] text-red-600 font-medium">{errorMsg}</p>
+)}
+
       <button
         type="button"
         onClick={handleAutoFill}
@@ -125,14 +225,18 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
             <ArrowRight className="w-4 h-4" />
           </>
         )}
-
-        {fillState === "filling" && (
+        {fillState === "filling" && !pending.type && (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
             Filling application...
           </>
         )}
-
+        {fillState === "filling" && pending.type && (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Waiting for your input above...
+          </>
+        )}
         {fillState === "done" && (
           <>
             <Check className="w-4 h-4" strokeWidth={2.5} />
@@ -143,6 +247,14 @@ function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
     </div>
   );
 }
+
+     
+
+  
+
+
+
+
 
 export default function SchemesPage() {
   const [schemes, setSchemes] = useState<SchemeVerdict[]>([]);
@@ -390,10 +502,10 @@ export default function SchemesPage() {
       {!loading && schemes.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {schemes.map((scheme) => (
-            <SchemeCard
-              key={scheme.scheme_name}
-              scheme={scheme}
-            />
+             <SchemeCard
+   key={scheme.application_id}
+   scheme={scheme}
+          />
           ))}
         </div>
       )}
