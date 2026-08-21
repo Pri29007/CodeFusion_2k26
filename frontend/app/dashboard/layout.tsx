@@ -152,13 +152,7 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          <button
-            type="button"
-            className="flex items-center gap-2 min-h-[44px] px-4 rounded-xl bg-blue-900 text-white text-sm font-semibold active:bg-blue-950 transition-colors shrink-0"
-          >
-            <Volume2 className="w-4 h-4" strokeWidth={2.25} />
-            <span className="hidden sm:inline">Listen</span>
-          </button>
+          
         </header>
 
         <main className="flex-1 px-4 sm:px-6 py-6 flex flex-col gap-6 max-w-5xl w-full mx-auto">
