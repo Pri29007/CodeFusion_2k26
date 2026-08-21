@@ -20,14 +20,14 @@ export default function SchemeStatus() {
   if (!scheme) return <Navigate to="/" replace />;
   const a = accentClasses[scheme.accent];
 
-  const [idInput, setIdInput] = useState("");
+ const [aadhaarInput, setAadhaarInput] = useState("");
   const [record, setRecord] = useState(null);
   const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleCheck() {
     setLoading(true);
-    const found = await mockApi.getApplication(idInput);
+    const found = await mockApi.getApplicationByAadhaar(aadhaarInput);
     setRecord(found);
     setChecked(true);
     setLoading(false);
@@ -50,14 +50,14 @@ export default function SchemeStatus() {
           <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
             <label className="mb-1.5 block text-sm font-medium text-navy-900">Application ID</label>
             <div className="flex gap-2">
-              <input
-                data-testid="status-application-id-input"
-                type="text"
-                placeholder={`e.g. ${scheme.idPrefix}-2026-00123`}
-                value={idInput}
-                onChange={(e) => setIdInput(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3.5 py-2.5 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-navy-700/25 focus:border-navy-700"
-              />
+             <input
+              data-testid="status-aadhaar-input"
+              type="text"
+              placeholder="e.g. XXXX-XXXX-9012"
+  value={aadhaarInput}
+  onChange={(e) => setAadhaarInput(e.target.value)}
+  className="w-full rounded-md border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-700/25 focus:border-navy-700"
+/>
               <button
                 data-testid="check-status-button"
                 onClick={handleCheck}
@@ -76,7 +76,7 @@ export default function SchemeStatus() {
 
             {record && (
               <div className="mt-6 rounded-md border border-slate-200 bg-navy-50 p-5">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Application ID: {record.applicationId}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Aadhar Number: {record.applicationId}</p>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-sm text-slate-600">Current Status:</span>
                   <span

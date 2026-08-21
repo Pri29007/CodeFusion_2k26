@@ -114,7 +114,7 @@ def apply_pmay(page, user_data: dict) -> dict:
         # stage and pauses for real human input via the terminal (see
         # utils/verification.py).
         print("Resolving verification stage...")
-        resolve_verification_stage(page)
+        resolve_verification_stage(page, application_id)
         page.get_by_test_id("next-button").click()
 
         # ---- Step 8: Review + Submit ----

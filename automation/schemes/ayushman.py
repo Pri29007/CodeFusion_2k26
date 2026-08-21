@@ -29,7 +29,12 @@ import config
 from utils.verification import resolve_verification_stage
 
 
-def apply_ayushman(page, user_data: dict) -> dict:
+def apply_ayushman(
+    page,
+    user_data: dict,
+    application_id: str,
+) -> dict:
+    
     """
     Fills out and submits the Ayushman Bharat application using the given
     user_data (expects the shape found in data/sample_user_data.json,
@@ -108,7 +113,7 @@ def apply_ayushman(page, user_data: dict) -> dict:
         # stage and pauses for real human input via the terminal (see
         # utils/verification.py).
         print("Resolving verification stage...")
-        resolve_verification_stage(page)
+        resolve_verification_stage(page, application_id)
         page.get_by_test_id("next-button").click()
 
         # ---- Step 6: Review + Submit ----

@@ -139,7 +139,7 @@ SCHEME_FUNCTIONS = {
 }
 
 
-def run_automation(scheme: str, aadhaar_number: str | None, application_id: str | None = None):
+def run_automation(scheme: str, aadhaar_number: str | None):
     if scheme not in SCHEME_FUNCTIONS:
         print(f"Unknown scheme '{scheme}'. Choose one of: {', '.join(SCHEME_FUNCTIONS)}")
         return
@@ -159,12 +159,17 @@ def run_automation(scheme: str, aadhaar_number: str | None, application_id: str 
 
         user_data["_dummy_file_path"] = create_dummy_document()
 
-        result = apply_function(page, user_data)
+        result = apply_function(
+    page,
+    user_data,
+    application_id,
+)
 
         print("\n--- RESULT ---")
         print(json.dumps(result, indent=2))
 
     finally:
+        input("Press Enter to close the browser...")
         print("Closing browser...")
         close_browser(playwright, browser)
 
@@ -173,7 +178,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run scheme application automation.")
     parser.add_argument("scheme", nargs="?", default="pm_kisan", help="Scheme to run: pm_kisan, pmay, or ayushman")
     parser.add_argument("--aadhaar", default=None, help="Aadhaar number to fetch real user data from the backend")
-    parser.add_argument("--application-id", default=None, help="Application UUID, used to report status back to the backend")
     args = parser.parse_args()
 
-    run_automation(args.scheme, args.aadhaar, args.application_id)
+    run_automation(args.scheme, args.aadhaar)
