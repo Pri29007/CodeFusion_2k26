@@ -1,183 +1,382 @@
 """
 verification.py
 
-OTP / CAPTCHA detection and human-in-the-loop handling for the mock portals.
+Handles OTP and CAPTCHA verification for the mock portals.
 
-Both OTP (PM-KISAN, Ayushman Bharat) and CAPTCHA (PMAY) now pause real
-automation and wait for a human to supply the answer, following the same
-"swappable provider function" pattern:
+Flow:
 
-    submit_otp(page, otp_provider=get_otp_from_terminal, ...)
-    submit_captcha(page, captcha_provider=get_captcha_from_terminal, ...)
-
-Today, both providers just call Python's input(). Later, when this connects
-to the real YojanaMitra backend / LangGraph resume flow, only the provider
-function needs to change (e.g. one that reads the value a citizen typed
-into the actual frontend, delivered back through a resumed graph state) —
-submit_otp() / submit_captcha() themselves don't need to change.
-
-get_captcha_from_dom_debug() is kept ONLY as an explicit, opt-in
-demo/testing fallback for headless/CI-style runs where no human is present
-to answer the terminal prompt. It is never used by default.
+    Playwright reaches OTP/CAPTCHA
+            |
+            v
+    request-input endpoint is called
+            |
+            v
+    Backend stores:
+        pending_input_type
+        pending_input_image_url
+        pending_input_resolved = False
+            |
+            v
+    Frontend detects pending input
+            |
+            v
+    User enters OTP/CAPTCHA
+            |
+            v
+    Frontend calls submit-input endpoint
+            |
+            v
+    pending_input_resolved = True
+            |
+            v
+    This file detects the answer
+            |
+            v
+    Playwright fills the answer and continues
 """
 
+import base64
+import time
+import requests
 import config
 
 
+# Backend URL.
+#
+# Add BACKEND_BASE_URL to config.py if it does not already exist.
+# Example:
+#
+# BACKEND_BASE_URL = "http://127.0.0.1:8000"
+
+BACKEND_BASE_URL = getattr(
+    config,
+    "BACKEND_BASE_URL",
+    "http://127.0.0.1:8000",
+).rstrip("/")
+
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
 def is_otp_stage(page) -> bool:
-    """True if the current step is the OTP verification screen."""
+    """Return True if the current page is the OTP verification stage."""
     return page.get_by_test_id("otp-verification").is_visible()
 
 
 def is_captcha_stage(page) -> bool:
-    """True if the current step is the CAPTCHA verification screen."""
+    """Return True if the current page is the CAPTCHA verification stage."""
     return page.get_by_test_id("captcha-verification").is_visible()
+
+
+# ---------------------------------------------------------------------------
+# Backend human-input communication
+# ---------------------------------------------------------------------------
+
+def request_human_input(
+    application_id: str,
+    input_type: str,
+    image_url: str | None = None,
+):
+    """
+    Tell the backend that the automation requires user input.
+
+    input_type:
+        "otp" or "captcha"
+
+    image_url:
+        For CAPTCHA, this can contain a Base64 data URL representing
+        a screenshot of the CAPTCHA.
+    """
+
+    url = (
+        f"{BACKEND_BASE_URL}/applications/"
+        f"{application_id}/request-input"
+    )
+
+    response = requests.post(
+        url,
+        json={
+            "input_type": input_type,
+            "image_url": image_url,
+        },
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+
+def wait_for_human_input(
+    application_id: str,
+    input_type: str,
+    image_url: str | None = None,
+    poll_interval: int = 2,
+) -> str:
+    """
+    Tell the backend that OTP/CAPTCHA input is required, then continuously
+    poll the application until the frontend user submits an answer.
+
+    Returns the value entered by the user.
+    """
+
+    print(f"Requesting {input_type} input from user...")
+
+    request_human_input(
+        application_id=application_id,
+        input_type=input_type,
+        image_url=image_url,
+    )
+
+    print(f"Waiting for user to provide {input_type}...")
+
+    url = f"{BACKEND_BASE_URL}/applications/{application_id}"
+
+    while True:
+        try:
+            response = requests.get(
+                url,
+                timeout=10,
+            )
+
+            response.raise_for_status()
+
+            application_data = response.json()
+
+            if application_data.get("pending_input_resolved"):
+                value = application_data.get(
+                    "pending_input_value"
+                )
+
+                if value:
+                    print(
+                        f"Received {input_type} from user. "
+                        "Resuming automation..."
+                    )
+
+                    return str(value).strip()
+
+            time.sleep(poll_interval)
+
+        except requests.RequestException as error:
+            print(
+                f"Error while checking for {input_type}: {error}"
+            )
+
+            time.sleep(poll_interval)
+
+
+# ---------------------------------------------------------------------------
+# CAPTCHA screenshot
+# ---------------------------------------------------------------------------
+
+def get_captcha_image(page) -> str:
+    """
+    Takes a screenshot of the CAPTCHA section and converts it into a
+    Base64 data URL.
+
+    This can be stored in the database and directly used by the frontend:
+
+        <img src={pending_input_image_url} />
+
+    Returns:
+        data:image/png;base64,...
+    """
+
+    captcha_container = page.get_by_test_id(
+        "captcha-verification"
+    )
+
+    screenshot_bytes = captcha_container.screenshot()
+
+    encoded_image = base64.b64encode(
+        screenshot_bytes
+    ).decode("utf-8")
+
+    return f"data:image/png;base64,{encoded_image}"
 
 
 # ---------------------------------------------------------------------------
 # OTP
 # ---------------------------------------------------------------------------
 
-def get_otp_from_terminal(context: dict | None = None) -> str:
+def submit_otp(
+    page,
+    application_id: str,
+    max_attempts: int = 3,
+) -> str:
     """
-    Default OTP provider: pauses and waits for a human to type the OTP
-    into the terminal.
+    Requests an OTP from the user through the backend.
 
-    `context` is accepted (and currently unused) so future providers with
-    the same signature can use application/scheme context if needed,
-    without changing the call site in submit_otp().
+    Once the frontend submits the OTP, Playwright automatically fills it
+    into the mock portal.
+
+    Retries up to max_attempts if the OTP is rejected.
     """
-    return input("Enter the OTP: ").strip()
 
-
-def submit_otp(page, otp_provider=get_otp_from_terminal, max_attempts: int = 3) -> str:
-    """
-    Pauses automation and waits for an OTP from otp_provider (defaults to
-    a terminal prompt), then fills and submits it. Retries up to
-    max_attempts times if the portal rejects the OTP.
-
-    Returns the OTP that was ultimately accepted.
-    """
     print("OTP verification required. Automation paused.")
 
     for attempt in range(1, max_attempts + 1):
-        otp_code = otp_provider()
 
-        page.get_by_test_id("otp-input").fill(otp_code)
-        page.get_by_test_id("verify-otp-button").click()
-
-        # The mock portal has a simulated ~500ms network delay before
-        # resolving the OTP check. Wait for the actual outcome (Continue
-        # enabled = success, otp-error visible = wrong code) instead of
-        # guessing a fixed sleep duration.
-        page.wait_for_function(
-            """() => {
-                const btn = document.querySelector('[data-testid="next-button"]');
-                const err = document.querySelector('[data-testid="otp-error"]');
-                return (btn && !btn.disabled) || err;
-            }"""
+        otp_code = wait_for_human_input(
+            application_id=application_id,
+            input_type="otp",
         )
 
-        if page.get_by_test_id("otp-error").is_visible():
-            print(f"Incorrect OTP. Please try again. (attempt {attempt}/{max_attempts})")
+        page.get_by_test_id(
+            "otp-input"
+        ).fill(otp_code)
+
+        page.get_by_test_id(
+            "verify-otp-button"
+        ).click()
+
+        page.wait_for_function(
+            """() => {
+                const btn = document.querySelector(
+                    '[data-testid="next-button"]'
+                );
+
+                const err = document.querySelector(
+                    '[data-testid="otp-error"]'
+                );
+
+                return (btn && !btn.disabled) || err;
+            }""",
+            timeout=10000,
+        )
+
+        if page.get_by_test_id(
+            "otp-error"
+        ).is_visible():
+
+            print(
+                f"Incorrect OTP. "
+                f"Attempt {attempt}/{max_attempts}"
+            )
+
+            # Loop again.
+            # A new request-input call will reset:
+            #
+            # pending_input_resolved = False
+            # pending_input_value = None
+            #
+            # so the frontend can submit a new value.
+
             continue
 
-        print("OTP verified. Resuming automation...")
+        print("OTP verified successfully.")
+
         return otp_code
 
-    raise RuntimeError(f"OTP verification failed after {max_attempts} attempts.")
+    raise RuntimeError(
+        f"OTP verification failed after "
+        f"{max_attempts} attempts."
+    )
 
 
 # ---------------------------------------------------------------------------
 # CAPTCHA
 # ---------------------------------------------------------------------------
 
-def get_captcha_from_terminal(context: dict | None = None) -> str:
+def submit_captcha(
+    page,
+    application_id: str,
+    max_attempts: int = 3,
+) -> str:
     """
-    Default CAPTCHA provider: pauses and waits for a human to read the
-    CAPTCHA characters shown in the (visible) browser window and type them
-    into the terminal. Deliberately does NOT print the answer — the whole
-    point is that a real person reads it off the screen.
+    Takes a screenshot of the CAPTCHA and sends it to the backend.
+
+    The frontend can display the screenshot to the user. Once the user
+    enters the CAPTCHA and calls submit-input, Playwright automatically
+    fills the value into the mock portal.
     """
-    return input("Enter the CAPTCHA shown on the portal: ").strip()
 
-
-def get_captcha_from_dom_debug(page) -> str:
-    """
-    OPTIONAL DEMO/TESTING FALLBACK ONLY.
-
-    Reads the CAPTCHA answer directly from the data-captcha-answer
-    attribute the mock portal exposes on [data-testid="captcha-verification"],
-    instead of requiring a human to read and type it. This bypasses the
-    human-in-the-loop check entirely.
-
-    Only use this for headless/CI-style automated test runs where no human
-    is present to answer the terminal prompt — never as the default
-    behavior. To use it, pass it in wrapped so it matches the no-argument
-    provider signature, e.g.:
-
-        submit_captcha(page, captcha_provider=lambda: get_captcha_from_dom_debug(page))
-    """
-    container = page.get_by_test_id("captcha-verification")
-    return container.get_attribute("data-captcha-answer")
-
-
-def submit_captcha(page, captcha_provider=get_captcha_from_terminal, max_attempts: int = 3) -> str:
-    """
-    Pauses automation and waits for a CAPTCHA answer from captcha_provider
-    (defaults to a terminal prompt), then fills and submits it. Retries up
-    to max_attempts times if the portal rejects the answer.
-
-    Returns the CAPTCHA text that was ultimately accepted.
-    """
     print("CAPTCHA verification required. Automation paused.")
 
     for attempt in range(1, max_attempts + 1):
-        code = captcha_provider()
 
-        page.get_by_test_id("captcha-input").fill(code)
-        page.get_by_test_id("verify-captcha-button").click()
+        # Capture the CAPTCHA currently visible in Playwright.
+        captcha_image = get_captcha_image(page)
 
-        # The mock portal's CAPTCHA check is synchronous (no simulated
-        # network delay), but we still wait for the actual DOM outcome
-        # rather than assuming it's instant, since React state updates
-        # aren't guaranteed to be reflected the instant click() returns.
-        page.wait_for_function(
-            """() => {
-                const btn = document.querySelector('[data-testid="next-button"]');
-                const err = document.querySelector('[data-testid="captcha-error"]');
-                return (btn && !btn.disabled) || err;
-            }""",
-            timeout=5000,
+        code = wait_for_human_input(
+            application_id=application_id,
+            input_type="captcha",
+            image_url=captcha_image,
         )
 
-        if page.get_by_test_id("captcha-error").is_visible():
-            print(f"Incorrect CAPTCHA. Please try again. (attempt {attempt}/{max_attempts})")
+        page.get_by_test_id(
+            "captcha-input"
+        ).fill(code)
+
+        page.get_by_test_id(
+            "verify-captcha-button"
+        ).click()
+
+        page.wait_for_function(
+            """() => {
+                const btn = document.querySelector(
+                    '[data-testid="next-button"]'
+                );
+
+                const err = document.querySelector(
+                    '[data-testid="captcha-error"]'
+                );
+
+                return (btn && !btn.disabled) || err;
+            }""",
+            timeout=10000,
+        )
+
+        if page.get_by_test_id(
+            "captcha-error"
+        ).is_visible():
+
+            print(
+                f"Incorrect CAPTCHA. "
+                f"Attempt {attempt}/{max_attempts}"
+            )
+
             continue
 
-        print("CAPTCHA verified. Resuming automation...")
+        print("CAPTCHA verified successfully.")
+
         return code
 
-    raise RuntimeError(f"CAPTCHA verification failed after {max_attempts} attempts.")
+    raise RuntimeError(
+        f"CAPTCHA verification failed after "
+        f"{max_attempts} attempts."
+    )
 
 
 # ---------------------------------------------------------------------------
 # Shared entry point
 # ---------------------------------------------------------------------------
 
-def resolve_verification_stage(page):
+def resolve_verification_stage(
+    page,
+    application_id: str,
+):
     """
-    Convenience function: detects whichever verification type is present
-    on the current step and resolves it. Both OTP and CAPTCHA now pause
-    for real human input via the terminal by default.
+    Detect whether the current verification screen requires OTP or CAPTCHA
+    and resolve it using the backend/frontend human-input flow.
     """
+
     if is_otp_stage(page):
-        submit_otp(page)
+
+        submit_otp(
+            page=page,
+            application_id=application_id,
+        )
+
     elif is_captcha_stage(page):
-        submit_captcha(page)
+
+        submit_captcha(
+            page=page,
+            application_id=application_id,
+        )
+
     else:
         raise RuntimeError(
-            "resolve_verification_stage() was called but neither the OTP "
-            "nor CAPTCHA stage is visible. Check that the form actually "
-            "reached the verification step."
+            "resolve_verification_stage() was called but neither "
+            "the OTP nor CAPTCHA stage is visible."
         )

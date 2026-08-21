@@ -8,6 +8,7 @@
 # "pm-kisan" / "ayushman-bharat".
 
 BASE_URL = "http://localhost:5173"
+BACKEND_BASE_URL = "http://localhost:8000"
 
 # Scheme landing pages
 PM_KISAN_URL = f"{BASE_URL}/pmkisan"
