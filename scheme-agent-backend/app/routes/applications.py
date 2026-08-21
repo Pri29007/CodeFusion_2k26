@@ -129,7 +129,6 @@ def trigger_automation(application_id: str, db: Session = Depends(get_db)):
     result = subprocess.run(
         [sys.executable, "main.py", scheme_key, "--aadhaar", application.user_id, "--application-id", str(application.id)],
         cwd=AUTOMATION_DIR,
-        capture_output=True,
         text=True,
     )
 
