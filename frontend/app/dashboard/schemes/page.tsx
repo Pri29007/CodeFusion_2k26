@@ -12,6 +12,7 @@ import {
 import { supabase } from "../../../lib/supabase";
 
 type SchemeVerdict = {
+  application_id:string;
   scheme_name: string;
   level: string;
   category: string;
@@ -32,15 +33,31 @@ function formatFieldName(field: string) {
 function SchemeCard({ scheme }: { scheme: SchemeVerdict }) {
   const [fillState, setFillState] = useState<FillState>("idle");
 
-  function handleAutoFill() {
+  async function handleAutoFill() {
     if (fillState !== "idle") return;
 
     setFillState("filling");
 
-    setTimeout(() => {
+    try {
+      const res = await fetch(
+        `http://localhost:8000/applications/${scheme.application_id}/apply`,
+        { method: "POST" }
+      );
+
+      if (!res.ok) {
+        console.error("Automation failed:", await res.text());
+        setFillState("idle");
+        return;
+      }
+
+      const result = await res.json();
+      console.log("Automation result:", result);
       setFillState("done");
-    }, 1600);
-  }
+    } catch (err) {
+      console.error("Network error triggering automation:", err);
+      setFillState("idle");
+    }
+}
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col gap-2.5">
@@ -149,7 +166,7 @@ export default function SchemesPage() {
 
     const { data, error } = await supabase
       .from("applications")
-      .select("scheme_name, form_data")
+      .select("id,scheme_name, form_data")
       .eq("aadhaar_number", aadhaar);
 
     if (error) {
@@ -159,6 +176,7 @@ export default function SchemesPage() {
     }
 
     const mapped: SchemeVerdict[] = (data ?? []).map((row: any) => ({
+      application_id: row.id,
       scheme_name:
         row.form_data?.scheme_name ?? row.scheme_name,
 
